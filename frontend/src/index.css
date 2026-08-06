@@ -1,0 +1,434 @@
+/* Dark only: the basemap is dark and the vehicle colors were chosen against
+   this surface. */
+:root {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --map-surface: #12121a;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --good: #0ca30c;
+  --critical: #d03b3b;
+  --focus: #7ab0f2;
+
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body,
+#root {
+  margin: 0;
+  height: 100vh;
+}
+
+h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.small {
+  font-size: 12px;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px rgba(12, 163, 12, 0.18);
+}
+.dot[data-stale="true"] {
+  background: var(--critical);
+  box-shadow: 0 0 0 3px rgba(208, 59, 59, 0.18);
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segmented {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.segmented button {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.segmented button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+.segmented button.on {
+  background: rgba(57, 135, 229, 0.22);
+  color: var(--text-primary);
+}
+/* inset, because .segmented clips overflow and would eat an outset ring */
+.segmented button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  color: var(--text-primary);
+}
+
+.banner {
+  background: rgba(208, 59, 59, 0.15);
+  border-bottom: 1px solid rgba(208, 59, 59, 0.4);
+  color: #f0b4b4;
+  padding: 7px 16px;
+  font-size: 12px;
+}
+
+/* layout */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 372px;
+  position: relative;
+  min-height: 0;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+  background: var(--map-surface);
+}
+
+.sidebar {
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel-block {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px;
+}
+.panel-block .panel-block {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ghost-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ghost-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.ghost-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  color: var(--text-primary);
+}
+
+/* legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 10px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.chip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* outline, so "no data" doesn't read as another step on the scale */
+.chip-hollow {
+  background: transparent;
+  border: 1px solid #6a6a68;
+}
+
+.legend-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 22px;
+  background: rgba(18, 18, 26, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  backdrop-filter: blur(6px);
+}
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+/* tiles */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tiles.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tile {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 10px;
+}
+.tile-value {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.tile-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* chart */
+.chart-body {
+  position: relative;
+}
+
+.axis-label {
+  font-size: 9.5px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.row-label {
+  font-size: 11px;
+  fill: var(--text-secondary);
+}
+.row-value {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hovercard {
+  position: absolute;
+  right: 0;
+  top: 0;
+  background: rgba(12, 12, 18, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  min-width: 178px;
+  pointer-events: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.hovercard strong {
+  font-size: 12px;
+}
+.hovercard dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+.hovercard dt {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hovercard dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.data-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--grid);
+  padding: 4px 5px;
+}
+.data-table th:not(:first-child) {
+  text-align: right;
+}
+.data-table td {
+  padding: 4px 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  color: var(--text-secondary);
+}
+.data-table.tight td,
+.data-table.tight th {
+  padding: 3px 4px;
+}
+
+/* vehicle card */
+.kv {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 12px;
+  margin: 0;
+  font-size: 11.5px;
+}
+.kv dt {
+  color: var(--text-muted);
+}
+.kv dd {
+  margin: 0;
+  text-align: right;
+  color: var(--text-secondary);
+}
+
+.conf {
+  text-transform: capitalize;
+}
+.conf-high {
+  color: var(--good);
+}
+.conf-medium {
+  color: #fab219;
+}
+.conf-low {
+  color: var(--critical);
+}
+
+.footnote {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 0 2px;
+}
+
+/* MapLibre's own chrome, toned down to match. */
+.maplibregl-ctrl-attrib {
+  background: rgba(18, 18, 26, 0.8) !important;
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--text-muted) !important;
+}
+
+@media (max-width: 1000px) {
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, 1fr) auto;
+  }
+  .sidebar {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .legend-overlay {
+    bottom: auto;
+    top: 12px;
+  }
+}
