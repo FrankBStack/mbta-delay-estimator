@@ -2,8 +2,8 @@
 // steps clear 3:1 against the dark basemap.
 
 export const DELAY_BUCKETS = [
-  { key: "very_early", max: -180, color: "#86b6ef", label: "3+ min early" },
-  { key: "early", max: -45, color: "#3987e5", label: "45s-3 min early" },
+  { key: "very_early", max: -180, color: "#3987e5", label: "3+ min early" },
+  { key: "early", max: -45, color: "#86b6ef", label: "45s-3 min early" },
   { key: "on_time", max: 90, color: "#898781", label: "On time (−45s to +90s)" },
   { key: "late", max: 300, color: "#ec835a", label: "90s-5 min late" },
   { key: "very_late", max: Infinity, color: "#d03b3b", label: "5+ min late" },
