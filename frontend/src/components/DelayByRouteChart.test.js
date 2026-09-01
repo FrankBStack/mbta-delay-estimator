@@ -13,7 +13,6 @@ describe("shortName", () => {
   });
 
   it("only strips a trailing suffix", () => {
-    // "Line" mid-string is load-bearing here
     expect(shortName("Blue Line Shuttle")).toBe("Blue Line Shuttle");
     expect(shortName("Green Line B")).toBe("Green Line B");
   });

@@ -1,14 +1,11 @@
 # MBTA Delay Estimator
 
-Real-time Boston transit vehicles rendered on a map, with delays derived from
-each vehicle's physical position against the published timetable rather than
-read from the agency feed.
+Real-time map of Boston transit vehicles. Delays are computed from each
+vehicle's physical position against the published timetable, not read from the
+agency feed.
 
-Validated against the agency's own predictions: over a weekday evening peak —
-744 vehicles, 157 routes, 87k paired observations — the two figures agree at
-r = 0.99, mean difference +19s, 89% within 60 seconds. The divergence that
-remains is mostly definitional; the validation section below measures it and
-traces where it comes from.
+The computed figure agrees with the MBTA's own predictions at r = 0.99 over a
+weekday evening peak; see [Validation](#validation) below.
 
 ![Live map of Boston with vehicles colored by delay, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/screenshot.png)
 
@@ -21,20 +18,19 @@ MapLibre GL, Vite.
 
 ## Deriving delay from position
 
-Two fields the MBTA does not publish shape the design of this component:
+Two fields are missing from the MBTA's data:
 
-- `TripUpdates` contains no `delay` field, only absolute predicted arrival times.
+- `TripUpdates` has no `delay` field, only absolute predicted arrival times.
 - `shape_dist_traveled` is empty across all 393,561 shape points, so there is no
   published measure of how far along a route a given stop sits.
 
-The second omission is the bigger problem: without it there's no way to say
-"this vehicle is between stops 7 and 8, 40% of the way along", which is exactly
-what inferring delay from a position needs. `app.offsets` derives the measure instead:
-`ST_LineLocatePoint` computes, for every distinct (shape, stop) pair, the
-fraction along the route line at which that stop falls. This reduces the
-timetable to a mapping from position to time, which can then be inverted —
-project a live vehicle onto its own shape and read off when the schedule expects
-a vehicle at that point.
+The second is the bigger problem: without it there's no way to say "this
+vehicle is between stops 7 and 8, 40% of the way along". `app.offsets` derives
+it instead: `ST_LineLocatePoint` computes, for every distinct (shape, stop)
+pair, the fraction along the route line at which that stop falls. That turns
+the timetable into a mapping from position to time, so a live vehicle projected
+onto its own shape can be compared with when the schedule expected a vehicle at
+that point.
 
 The work is keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence).
 87,656 trips share only 1,156 shapes, which reduces the geometry operations from
@@ -47,20 +43,19 @@ unprojected coordinates biases the result east-west.
 
 ### Placing a vehicle on its route
 
-A fraction alone isn't enough. `ST_LineLocatePoint` returns the first nearest
-point on the line, so on a loop route a vehicle on its second pass resolves to a
-position near the start. This affects 2.6% of MBTA trips, flagged at load time
-as `frac_monotonic = false`. The feed's `current_stop_sequence` determines which
-leg the vehicle occupies; the geometry then locates it along that leg.
+`ST_LineLocatePoint` returns the first nearest point on the line, so on a loop
+route a vehicle on its second pass resolves to a position near the start. This
+affects 2.6% of MBTA trips, flagged at load time as `frac_monotonic = false`.
+To handle it, the feed's `current_stop_sequence` picks which leg the vehicle is
+on, and the geometry then locates it along that leg only.
 
-Each observation records the method used, so any suspect value can be traced
-back to its derivation:
+Each observation records which method produced it:
 
 | Method | Description |
 |---|---|
 | `interpolated` | In transit; scheduled time prorated along the shape between two stops |
 | `stopped_at` | Stopped at a mid-route stop; that stop's scheduled time exactly |
-| `layover` | Stopped at the trip's first stop (see below) |
+| `layover` | Stopped at the trip's first stop; measured against scheduled departure, floored at zero |
 | `first_stop` | Approaching the first stop, with no preceding stop to interpolate from |
 
 Observations are marked low confidence where the vehicle sits more than 150m
@@ -70,95 +65,19 @@ from analytics by default.
 
 Stop-to-shape snap error across the loaded feed: mean 7.0m, p95 11.9m.
 
-## Validation against the agency's predictions
+## Validation
 
-Because the MBTA publishes no delay field, its column is derived here as
-predicted arrival minus scheduled arrival for the same trip and stop. The two
-figures answer different questions — ours is how late a vehicle is right now,
-theirs how late it will be on arrival — so the interesting part is where and
-why they diverge.
+Since the MBTA publishes no delay field, its figure is derived for comparison
+as predicted arrival minus scheduled arrival for the same trip and stop. Over a
+weekday evening peak (87,461 paired observations) the two agree at correlation
+0.9935, mean divergence +19s, 88.8% within 60s. They answer different
+questions (ours is how late a vehicle is right now, theirs is how late it will
+be on arrival), so they diverge most during long dwells and at peak service,
+where correlation drops to 0.96 against 0.99 overnight.
 
-The tables below predate a correction to the feed join (`with_feed` in
-`app/services/delay.py`), which took the newest prediction for a stop rather
-than the contemporaneous one, so treat their exact figures as approximate;
-they're kept because they document how the estimator was debugged. Re-measured
-after the correction over a weekday evening peak: correlation 0.9935, mean
-divergence +19s, σ 50s, 88.8% within 60s (87,461 compared observations).
-
-That comparison caught a real bug in the first version of the estimator. Broken down by
-placement method, mid-route stops agreed with the agency to within 16 seconds,
-but vehicles stopped at the first stop of their trip resolved to 323 seconds
-early on average while the feed reported them on time.
-
-Neither number was wrong; they were measuring different things. A bus sitting
-at its origin at 04:55 ahead of an 05:00 departure really has arrived five
-minutes before that stop's scheduled time — but it won't leave early, so calling
-it five minutes early is meaningless.
-
-Vehicles at their first stop are now measured against scheduled *departure*,
-floored at zero. Mid-route stops retain the signed comparison, since a vehicle
-running a timepoint two minutes early is genuinely early and passengers miss it.
-
-Recomputed over the same observations with the same feed values, changing only
-the estimator:
-
-| Metric | Before | After |
-|---|---|---|
-| Correlation with feed | 0.851 | 0.985 |
-| Mean divergence | −47s | +6s |
-| Standard deviation | 166s | 45s |
-| Within 60s of feed | 76.4% | 92.2% |
-
-The layover class alone moved from −323s mean divergence to −8s.
-
-### Agreement across service levels
-
-Measured over a continuous run on Tuesday 28 July 2026, split between overnight
-service and the weekday morning peak:
-
-| | Overnight (00:17–05:00) | Morning peak (07:00–09:10) |
-|---|---:|---:|
-| Observations | 13,126 | 7,751 |
-| Distinct vehicles | 231 | 765 |
-| Routes | 92 | 166 |
-| Mean delay (computed) | 129s | 162s |
-| Correlation with feed | 0.9916 | 0.9597 |
-| Mean divergence | +11s | +23s |
-| Standard deviation | 45s | 84s |
-| Within 60s of feed | 92.9% | 87.1% |
-
-Agreement is noticeably weaker at peak. Service is later on average, and the
-spread between the two methods roughly doubles. Both effects are expected:
-congestion and passenger boarding introduce variance that a position-derived
-figure and a forward-looking prediction absorb differently.
-
-The residual isn't noise, though: predictions bake in expected recovery —
-schedule padding, time made up on an express segment — so the position-derived
-figure reads consistently later.
-
-Breaking the peak window down by placement method locates most of that spread:
-
-| Method | Observations | Mean divergence | Mean absolute divergence |
-|---|---:|---:|---:|
-| `interpolated` | 3,762 | +18s | 35s |
-| `stopped_at` | 2,764 | +43s | 47s |
-| `layover` | 1,209 | −1s | 3s |
-| `first_stop` | 16 | −127s | 127s |
-
-`stopped_at` accounts for the bulk of it. While a vehicle sits at a stop our
-figure keeps growing, since it is measured against that stop's scheduled arrival
-and time continues to pass; the agency has already recorded the arrival and
-moved its prediction to the next stop. Long peak dwells widen the gap. The gap
-is inherent to the two definitions, not a bug.
-
-`layover` stays at 3s mean absolute divergence even under peak load — good
-evidence the departure-based rule is right.
-
-Individual routes show the effect more sharply. At peak, route 504 measured
-13m36s late by position against a 12m24s prediction; earlier, in an overnight
-window, route 8 measured 8m42s late while the MBTA predicted arrival 1m18s
-early, implying roughly ten minutes of expected recovery before its next
-timepoint.
+[docs/validation.md](docs/validation.md) has the full breakdown: agreement by
+service level and placement method, per-route examples, and a bug in
+first-stop handling that the comparison caught.
 
 ## API
 
@@ -232,9 +151,9 @@ npm test                          # delay scale, formatting, chart helpers
 
 ## Deployment
 
-The poller writes; the API only reads. In production they run as separate
-processes, because a poller embedded in the API means every replica polls the
-same feeds and writes the same rows.
+The poller writes and the API only reads. In production they run as separate
+processes; otherwise every API replica would poll the same feeds and write the
+same rows.
 
 ```bash
 RUN_POLLER=false uvicorn app.main:app --port 8010   # API, any number of these
@@ -254,8 +173,8 @@ reports the real poller regardless of which process it runs in.
 | Disk | ~7 GB steady state. Alert on table size: a stalled prune is silent otherwise |
 
 Re-running `app.gtfs_static` drops and rebuilds every table, so the weekly feed
-reload is an outage — vehicles render without delays until the offsets finish.
-Build into a new schema and swap if that window matters.
+reload is a brief outage: vehicles render without delays until the offsets
+finish. If that window matters, build into a new schema and swap.
 
 ## Known limitations
 
@@ -272,7 +191,8 @@ Build into a new schema and swap if that window matters.
   URLs.
 - `npm audit` reports advisories in Vite's toolchain. They affect the
   development server rather than the production bundle, and the dev server binds
-  to 127.0.0.1. Re-check rather than trusting this line; the set changes.
+  to 127.0.0.1. The set changes over time, so re-run the audit rather than
+  trusting this note.
 - `backend/tests` covers the estimator's rules — the layover floor,
   interpolation, ratio clamping, the feed join, the confidence flags — against
   a synthetic route in a real PostGIS database. The static loader and the
