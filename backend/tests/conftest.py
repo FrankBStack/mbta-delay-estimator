@@ -30,6 +30,23 @@ FROM shape sh,
              (2, 'ST2', -71.09, 18300, 18360),
              (3, 'ST3', -71.08, 18600, 18600)) v(seq, stop, lon, arr, dep)
 WHERE sh.shape_id = 'S1';
+
+-- T2 is an out-and-back on the same shape: ST1 -> ST2 -> ST3 -> ST2. The
+-- return stop locates to its first match on the line, so its fraction runs
+-- backwards, the way ST_LineLocatePoint treats every loop.
+INSERT INTO trip VALUES ('T2', 'R1', 'SVC', 'S1', 0, 'Test');
+
+INSERT INTO trip_stop_offset
+SELECT 'S1', 'T2', v.seq, v.stop,
+       ST_LineLocatePoint(sh.geom_p,
+           ST_Transform(ST_SetSRID(ST_MakePoint(v.lon, 42.35), 4326), 26986)),
+       0, 0, v.arr, v.dep, false
+FROM shape sh,
+     (VALUES (1, 'ST1', -71.10, 18000, 18000),
+             (2, 'ST2', -71.09, 18300, 18360),
+             (3, 'ST3', -71.08, 18600, 18660),
+             (4, 'ST2', -71.09, 18900, 18900)) v(seq, stop, lon, arr, dep)
+WHERE sh.shape_id = 'S1';
 """
 
 

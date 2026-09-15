@@ -80,7 +80,10 @@ resolved AS (
                WHEN p.raw_ratio IS NOT NULL AND p.prev_departure_s IS NOT NULL
                     AND p.cur_arrival_s IS NOT NULL
                    THEN 'interpolated'
-               WHEN p.cur_arrival_s IS NOT NULL
+               -- a preceding stop exists but the leg's fractions run backwards
+               -- (loops, out-and-backs); scoring that against the next stop's
+               -- arrival would read as late by the whole leg, so drop it
+               WHEN p.prev_seq IS NULL AND p.cur_arrival_s IS NOT NULL
                    THEN 'first_stop'
                ELSE NULL
            END AS method,

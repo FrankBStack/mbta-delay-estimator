@@ -17,16 +17,16 @@ def at(secs, service_date=SERVICE_DATE):
     return noon - timedelta(hours=12) + timedelta(seconds=secs)
 
 
-async def observe(conn, ts, lon, *, seq, status, lat=42.35, vehicle="v1"):
+async def observe(conn, ts, lon, *, seq, status, lat=42.35, vehicle="v1", trip="T1"):
     await conn.execute(
         """
         INSERT INTO vehicle_position
             (vehicle_id, trip_id, route_id, direction_id, start_date, ts,
              geom, geom_p, current_status, current_stop_sequence)
-        SELECT $1, 'T1', 'R1', 0, $2, $3, g, ST_Transform(g, 26986), $4, $5
+        SELECT $1, $8, 'R1', 0, $2, $3, g, ST_Transform(g, 26986), $4, $5
         FROM (SELECT ST_SetSRID(ST_MakePoint($6, $7), 4326) AS g) p
         """,
-        vehicle, SERVICE_DATE, ts, status, seq, lon, lat,
+        vehicle, SERVICE_DATE, ts, status, seq, lon, lat, trip,
     )
     ids = [r["id"] for r in await conn.fetch("SELECT id FROM vehicle_position")]
     await delay.compute(conn, ids)
@@ -69,6 +69,21 @@ async def test_first_stop_measured_against_arrival(conn):
     assert row["method"] == "first_stop"
     assert row["computed_delay_s"] == 60
     assert row["confidence"] == "medium"
+
+
+async def test_backwards_leg_is_not_scored(conn):
+    # on the return leg of an out-and-back, heading for ST2 from ST3. The leg's
+    # fractions run backwards, so it can't be interpolated, and it must not be
+    # scored as if it had already arrived at ST2 (the old first_stop fallback).
+    row = await observe(conn, at(18780), -71.085, seq=4, status="IN_TRANSIT_TO", trip="T2")
+    assert row is None
+
+
+async def test_stopped_at_return_stop_still_scores(conn):
+    # the same leg's stop time is fine: it doesn't depend on the fraction
+    row = await observe(conn, at(18960), -71.09, seq=4, status="STOPPED_AT", trip="T2")
+    assert row["method"] == "stopped_at"
+    assert row["computed_delay_s"] == 60
 
 
 async def test_overrun_ratio_clamped(conn):

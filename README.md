@@ -48,8 +48,10 @@ unprojected coordinates biases the result east-west.
 `ST_LineLocatePoint` returns the first nearest point on the line, so on a loop
 route a vehicle on its second pass resolves to a position near the start. This
 affects 2.6% of MBTA trips, flagged at load time as `frac_monotonic = false`.
-To handle it, the feed's `current_stop_sequence` picks which leg the vehicle is
-on, and the geometry then locates it along that leg only.
+The feed's `current_stop_sequence` picks which leg the vehicle is on. Where that
+leg's stop fractions run backwards, an in-transit vehicle can't be placed along
+it and the observation is dropped rather than scored against the wrong stop;
+stopped-at and layover observations don't depend on the fraction and are kept.
 
 Each observation records which method produced it:
 
