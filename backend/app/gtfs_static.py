@@ -111,18 +111,21 @@ async def download(url, dest):
 
 
 async def load_routes(conn, feed):
-    rows = [
-        (
+    rows = []
+    for r in feed.rows("routes.txt"):
+        # 0 is light rail, so no `or 3` here
+        route_type = _int(r.get("route_type", ""))
+        if route_type is None:
+            route_type = 3
+        rows.append((
             r["route_id"],
             r.get("route_short_name") or None,
             r.get("route_long_name") or None,
-            _int(r.get("route_type", "")) or 3,
+            route_type,
             r.get("route_color") or None,
             r.get("route_text_color") or None,
             _int(r.get("route_sort_order", "")),
-        )
-        for r in feed.rows("routes.txt")
-    ]
+        ))
     await conn.executemany(
         "INSERT INTO route (route_id, route_short_name, route_long_name,"
         " route_type, route_color, route_text_color, route_sort_order)"
