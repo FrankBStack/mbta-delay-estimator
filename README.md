@@ -165,11 +165,8 @@ cd frontend
 npm test                          # delay scale, formatting, chart helpers
 ```
 
-GitHub Actions runs both suites on every push and pull request, the backend
-against a PostGIS service container, then builds the two Docker images. On
-pushes to `main` the images are published to GitHub Container Registry as
-`ghcr.io/frankbstack/mbta-delay-estimator/api` and `.../web`. Point the tests
-at another database with `TEST_ADMIN_URL` and `TEST_DATABASE_URL`.
+CI runs both suites and builds the Docker images on every push. Point the
+backend tests at another database with `TEST_ADMIN_URL` and `TEST_DATABASE_URL`.
 
 ## Deployment
 
@@ -185,38 +182,6 @@ python -m app.poller                                # exactly one of these
 `RUN_POLLER` defaults to true so a single local process still works unchanged.
 The poller records its state to `feed_meta` each cycle, so `/api/analytics/health`
 reports the real poller regardless of which process it runs in.
-
-| Concern | Handling |
-|---|---|
-| Load balancer probe | `GET /healthz` — one `SELECT 1`. `/api/analytics/health` runs unbounded counts and is diagnostic only |
-| Read load | Responses cached for `CACHE_TTL_S` (default 5s), so database load follows the poll interval rather than request volume |
-| CORS | Unnecessary if the built frontend and the API share an origin behind one reverse proxy; the frontend calls `/api` relatively. Otherwise set `CORS_ORIGINS` |
-| Interactive docs | `ENABLE_DOCS=false` removes `/docs`, `/redoc`, and `/openapi.json` |
-| Disk | ~7 GB steady state. Alert on table size: a stalled prune is silent otherwise |
-
-### On a single server
-
-`docker-compose.prod.yml` layers Caddy for TLS over the base stack, reads the
-database password and domain from `.env`, disables the interactive docs, and
-caps Postgres memory. It runs on a 2 GB box; add swap for the weekly load.
-
-```bash
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-git clone https://github.com/FrankBStack/mbta-delay-estimator.git /opt/tracker && cd /opt/tracker
-cp .env.example .env                    # set POSTGRES_PASSWORD and DOMAIN
-docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm load
-```
-
-`pull` needs the GHCR packages to be public or a `docker login ghcr.io`;
-otherwise drop it and `up --build` instead. Point the domain's A record at
-the box before `up`, since Caddy requests the certificate on start. Reload the
-feed weekly from cron:
-
-```
-0 4 * * 1 cd /opt/tracker && docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm load
-```
 
 Re-running `app.gtfs_static` drops and rebuilds every table, so the weekly feed
 reload is a brief outage: vehicles render without delays until the offsets
@@ -235,10 +200,6 @@ finish. If that window matters, build into a new schema and swap.
 - `PROJECTED_SRID` is specific to Massachusetts. Targeting another city requires
   selecting the appropriate local metre-based CRS, not only changing the feed
   URLs.
-- `npm audit` reports advisories in Vite's toolchain. They affect the
-  development server rather than the production bundle, and the dev server binds
-  to 127.0.0.1. The set changes over time, so re-run the audit rather than
-  trusting this note.
 - `backend/tests` covers the estimator's rules — the layover floor,
   interpolation, ratio clamping, the feed join, the confidence flags — against
   a synthetic route in a real PostGIS database. The static loader and the
