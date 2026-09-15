@@ -7,8 +7,9 @@
 A kept download is reused until it is a day old, then fetched again, so a
 scheduled reload actually picks up the agency's new feed.
 
-Drops and rebuilds every table, then runs app.offsets. Slow and occasional;
-the poller only ever reads these tables.
+Drops and rebuilds the static tables, then runs app.offsets. Slow and
+occasional; the poller only ever reads these tables. Positions and
+observations are left alone.
 """
 
 import argparse

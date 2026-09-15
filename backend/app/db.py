@@ -30,5 +30,6 @@ def pool():
 
 
 async def apply_schema(conn):
-    """Drops and recreates everything. A static load replaces the whole feed."""
+    """Drops and recreates the static tables. The realtime tables are
+    IF NOT EXISTS and survive, so a feed reload keeps the observation history."""
     await conn.execute(SCHEMA_PATH.read_text())

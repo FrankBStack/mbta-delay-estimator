@@ -154,7 +154,7 @@ npm install && npm run dev              # localhost:5173
 
 The static load handles 2.2M stop_times, 1,156 route shapes, and 2.2M derived
 stop offsets. Re-run it when the MBTA publishes a new feed (roughly weekly); it
-drops and rebuilds every table.
+drops and rebuilds the static tables and leaves the observation history alone.
 
 ### Tests
 
@@ -185,8 +185,8 @@ python -m app.poller                                # exactly one of these
 The poller records its state to `feed_meta` each cycle, so `/api/analytics/health`
 reports the real poller regardless of which process it runs in.
 
-Re-running `app.gtfs_static` drops and rebuilds every table, so the weekly feed
-reload is a brief outage: vehicles render without delays until the offsets
+Re-running `app.gtfs_static` drops and rebuilds the static tables, so the weekly
+feed reload is a brief outage: vehicles render without delays until the offsets
 finish. If that window matters, build into a new schema and swap.
 
 ## Known limitations

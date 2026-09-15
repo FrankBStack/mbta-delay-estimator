@@ -20,9 +20,11 @@ RETURNS timestamptz AS $$
 $$ LANGUAGE sql STABLE;
 
 
-DROP TABLE IF EXISTS delay_observation, trip_update, vehicle_position,
-    trip_stop_offset, stop_time, trip, shape, stop, route,
-    calendar_date, calendar, feed_meta CASCADE;
+-- Static tables are dropped and rebuilt on every feed load. The realtime
+-- tables further down are created once and left alone, so a reload doesn't
+-- throw away the observation history.
+DROP TABLE IF EXISTS trip_stop_offset, stop_time, trip, shape, stop, route,
+    calendar_date, calendar CASCADE;
 
 CREATE TABLE route (
     route_id         text PRIMARY KEY,
@@ -88,7 +90,7 @@ CREATE TABLE calendar_date (
     PRIMARY KEY (service_id, date)
 );
 
-CREATE TABLE feed_meta (
+CREATE TABLE IF NOT EXISTS feed_meta (
     key   text PRIMARY KEY,
     value text NOT NULL
 );
@@ -114,7 +116,7 @@ CREATE TABLE trip_stop_offset (
 );
 CREATE INDEX trip_stop_offset_trip_frac_idx ON trip_stop_offset (trip_id, frac);
 
-CREATE TABLE vehicle_position (
+CREATE TABLE IF NOT EXISTS vehicle_position (
     id                    bigserial PRIMARY KEY,
     vehicle_id            text NOT NULL,
     label                 text,
@@ -132,13 +134,13 @@ CREATE TABLE vehicle_position (
     stop_id               text,
     UNIQUE (vehicle_id, ts)
 );
-CREATE INDEX vehicle_position_ts_idx    ON vehicle_position (ts DESC);
-CREATE INDEX vehicle_position_trip_idx  ON vehicle_position (trip_id, ts DESC);
-CREATE INDEX vehicle_position_geom_idx  ON vehicle_position USING gist (geom);
+CREATE INDEX IF NOT EXISTS vehicle_position_ts_idx    ON vehicle_position (ts DESC);
+CREATE INDEX IF NOT EXISTS vehicle_position_trip_idx  ON vehicle_position (trip_id, ts DESC);
+CREATE INDEX IF NOT EXISTS vehicle_position_geom_idx  ON vehicle_position USING gist (geom);
 
 -- The agency's predictions, per trip/stop, with delay_s derived at insert time
 -- (the feed has no delay field of its own).
-CREATE TABLE trip_update (
+CREATE TABLE IF NOT EXISTS trip_update (
     trip_id       text NOT NULL,
     stop_sequence integer NOT NULL,
     stop_id       text,
@@ -151,11 +153,11 @@ CREATE TABLE trip_update (
     PRIMARY KEY (trip_id, stop_sequence, ts)
 );
 -- the (trip_id, stop_sequence, ts) PK already covers the per-stop lookup
-CREATE INDEX trip_update_ts_idx ON trip_update (ts DESC);
+CREATE INDEX IF NOT EXISTS trip_update_ts_idx ON trip_update (ts DESC);
 
 -- One row per placeable observation. computed_delay_s is ours, feed_delay_s is
 -- theirs, divergence_s is what we actually care about.
-CREATE TABLE delay_observation (
+CREATE TABLE IF NOT EXISTS delay_observation (
     id               bigserial PRIMARY KEY,
     vehicle_id       text NOT NULL,
     trip_id          text NOT NULL,
@@ -172,5 +174,5 @@ CREATE TABLE delay_observation (
     confidence       text NOT NULL,     -- high | medium | low
     UNIQUE (vehicle_id, ts)
 );
-CREATE INDEX delay_observation_route_ts_idx ON delay_observation (route_id, ts DESC);
-CREATE INDEX delay_observation_ts_idx       ON delay_observation (ts DESC);
+CREATE INDEX IF NOT EXISTS delay_observation_route_ts_idx ON delay_observation (route_id, ts DESC);
+CREATE INDEX IF NOT EXISTS delay_observation_ts_idx       ON delay_observation (ts DESC);

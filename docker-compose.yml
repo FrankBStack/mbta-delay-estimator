@@ -52,7 +52,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # One-off: `docker compose run --rm load`. Drops and rebuilds every table.
+  # One-off: `docker compose run --rm load`. Drops and rebuilds the static tables.
   load:
     <<: *backend
     profiles: [tools]
