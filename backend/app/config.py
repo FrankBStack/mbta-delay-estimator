@@ -23,8 +23,10 @@ POLL_INTERVAL_S = _int("POLL_INTERVAL_S", 15)
 AGENCY_TZ = os.getenv("AGENCY_TZ", "America/New_York")
 
 # NAD83 / Massachusetts Mainland, in metres. Everything that measures a
-# distance goes through this rather than raw lat/lon. Change it with the city.
-PROJECTED_SRID = _int("PROJECTED_SRID", 26986)
+# distance goes through this rather than raw lat/lon. Not an env setting: the
+# geom_p column types in schema.sql are declared with this SRID, so changing
+# it means changing the schema too.
+PROJECTED_SRID = 26986
 
 # beyond this distance from its own shape, an interpolation is not trustworthy
 MAX_SNAP_ERROR_M = _int("MAX_SNAP_ERROR_M", 150)
