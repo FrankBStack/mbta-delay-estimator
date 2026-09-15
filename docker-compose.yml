@@ -9,7 +9,7 @@ x-backend: &backend
 
 services:
   db:
-    image: postgis/postgis:17-3.6-alpine
+    image: imresamu/postgis:17-3.6
     environment:
       POSTGRES_USER: tracker
       POSTGRES_PASSWORD: tracker
