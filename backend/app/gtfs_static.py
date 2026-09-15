@@ -4,6 +4,9 @@
     python -m app.gtfs_static --zip a.zip  # load one you already have
     python -m app.gtfs_static --keep       # keep the download around
 
+A kept download is reused until it is a day old, then fetched again, so a
+scheduled reload actually picks up the agency's new feed.
+
 Drops and rebuilds every table, then runs app.offsets. Slow and occasional;
 the poller only ever reads these tables.
 """
@@ -24,6 +27,7 @@ from . import db, offsets
 from .config import GTFS_STATIC_URL, PROJECTED_SRID
 
 CACHE = pathlib.Path(__file__).resolve().parents[1] / ".cache"
+CACHE_MAX_AGE_H = 24
 
 # a long stop_desc will exceed the default limit
 csv.field_size_limit(10_000_000)
@@ -89,12 +93,19 @@ async def download(url, dest):
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"downloading {url}")
     started = time.monotonic()
-    async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as client:
-        async with client.stream("GET", url) as resp:
-            resp.raise_for_status()
-            with dest.open("wb") as fh:
-                async for chunk in resp.aiter_bytes(1 << 16):
-                    fh.write(chunk)
+    # write beside the target and rename, so a failed download never leaves a
+    # partial zip that the next run mistakes for a cached feed
+    part = dest.with_suffix(".part")
+    try:
+        async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as client:
+            async with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                with part.open("wb") as fh:
+                    async for chunk in resp.aiter_bytes(1 << 16):
+                        fh.write(chunk)
+        part.replace(dest)
+    finally:
+        part.unlink(missing_ok=True)
     print(f"  {dest.stat().st_size/1e6:.1f} MB in {time.monotonic()-started:.1f}s")
     return dest
 
@@ -297,8 +308,11 @@ async def run(zip_path, keep):
     downloaded = False
     if zip_path is None:
         zip_path = CACHE / "gtfs.zip"
-        if zip_path.exists():
-            age_h = (time.time() - zip_path.stat().st_mtime) / 3600
+        age_h = (
+            (time.time() - zip_path.stat().st_mtime) / 3600
+            if zip_path.exists() else None
+        )
+        if age_h is not None and age_h < CACHE_MAX_AGE_H:
             print(f"using cached {zip_path.name} ({age_h:.1f}h old)")
         else:
             await download(GTFS_STATIC_URL, zip_path)
