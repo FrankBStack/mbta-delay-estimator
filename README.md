@@ -130,7 +130,7 @@ API, matching the [Deployment](#deployment) layout below.
 
 ## Running locally
 
-Requires PostgreSQL with PostGIS, Python 3.11+, and Node 18+.
+Requires PostgreSQL with PostGIS, Python 3.11+, and Node 22+.
 
 ```bash
 brew install postgresql@17 postgis
