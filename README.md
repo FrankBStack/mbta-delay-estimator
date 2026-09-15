@@ -1,5 +1,7 @@
 # MBTA Delay Estimator
 
+[![CI](https://github.com/FrankBStack/mbta-delay-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/FrankBStack/mbta-delay-estimator/actions/workflows/ci.yml)
+
 Real-time map of Boston transit vehicles. Delays are computed from each
 vehicle's physical position against the published timetable, not read from the
 agency feed.
@@ -162,6 +164,12 @@ cd backend
 cd frontend
 npm test                          # delay scale, formatting, chart helpers
 ```
+
+GitHub Actions runs both suites on every push and pull request, the backend
+against a PostGIS service container, then builds the two Docker images. On
+pushes to `main` the images are published to GitHub Container Registry as
+`ghcr.io/frankbstack/mbta-delay-estimator/api` and `.../web`. Point the tests
+at another database with `TEST_ADMIN_URL` and `TEST_DATABASE_URL`.
 
 ## Deployment
 

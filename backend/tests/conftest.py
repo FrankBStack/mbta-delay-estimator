@@ -1,11 +1,12 @@
+import os
 import pathlib
 
 import asyncpg
 import pytest
 
 SCHEMA = pathlib.Path(__file__).resolve().parents[1] / "app" / "schema.sql"
-ADMIN_URL = "postgresql://localhost:5432/postgres"
-TEST_URL = "postgresql://localhost:5432/tracker_test"
+ADMIN_URL = os.getenv("TEST_ADMIN_URL", "postgresql://localhost:5432/postgres")
+TEST_URL = os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/tracker_test")
 
 # A straight east-west line at lat 42.35, three stops: start, midpoint, end.
 # Schedule: 05:00:00 depart, 05:05:00 arrive mid (05:06:00 depart), 05:10:00 end.
