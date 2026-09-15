@@ -136,6 +136,18 @@ async def test_feed_join_ignores_distant_predictions(conn):
     assert row["divergence_s"] is None
 
 
+async def test_backfill_rebuilds_observations(conn):
+    before = await observe(conn, at(18240), -71.095, seq=2, status="IN_TRANSIT_TO")
+    # damage the stored figure, then let backfill throw it away and recompute
+    await conn.execute("UPDATE delay_observation SET computed_delay_s = 9999")
+    # window is measured from now(), so the fixture's 2026 timestamps need a
+    # window wide enough to reach them
+    n = await delay.backfill(conn, hours=24 * 366 * 5)
+    after = await conn.fetchrow("SELECT * FROM delay_observation WHERE vehicle_id = 'v1'")
+    assert n == 1
+    assert after["computed_delay_s"] == before["computed_delay_s"]
+
+
 async def test_no_stop_sequence_is_skipped(conn):
     row = await observe(conn, at(18240), -71.095, seq=None, status="IN_TRANSIT_TO")
     assert row is None

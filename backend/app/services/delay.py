@@ -168,22 +168,26 @@ async def compute(conn, position_ids):
 
 async def backfill(conn, hours=None):
     """Recompute recent delays. The raw positions are already stored, so you
-    can change the estimator and rebuild without waiting for new data."""
+    can change the estimator and rebuild without waiting for new data.
+
+    One transaction, delete first: a poll that lands after the delete is
+    either wholly visible to the id snapshot (and its own observation wins
+    on conflict) or not visible at all, so nothing is lost either way.
+    """
     hours = BACKFILL_HOURS if hours is None else hours
-    ids = [
-        r["id"]
-        for r in await conn.fetch(
-            "SELECT id FROM vehicle_position WHERE ts > now() - ($1 || ' hours')::interval",
+    async with conn.transaction():
+        await conn.execute(
+            "DELETE FROM delay_observation WHERE ts > now() - ($1 || ' hours')::interval",
             str(hours),
         )
-    ]
-    if not ids:
-        return 0
-    await conn.execute(
-        "DELETE FROM delay_observation WHERE ts > now() - ($1 || ' hours')::interval",
-        str(hours),
-    )
-    total = 0
-    for i in range(0, len(ids), 5000):
-        total += await compute(conn, ids[i : i + 5000])
+        ids = [
+            r["id"]
+            for r in await conn.fetch(
+                "SELECT id FROM vehicle_position WHERE ts > now() - ($1 || ' hours')::interval",
+                str(hours),
+            )
+        ]
+        total = 0
+        for i in range(0, len(ids), 5000):
+            total += await compute(conn, ids[i : i + 5000])
     return total

@@ -105,6 +105,7 @@ backend/app/
   schema.sql        tables, indexes, and the gtfs_ts() time helper
   gtfs_static.py    GTFS zip into PostGIS via streaming COPY
   offsets.py        ST_LineLocatePoint stop-position cache
+  backfill.py       recompute observations from stored positions
   services/
     realtime.py     GTFS-realtime poller
     delay.py        the schedule join and comparison
@@ -188,6 +189,10 @@ reports the real poller regardless of which process it runs in.
 Re-running `app.gtfs_static` drops and rebuilds the static tables, so the weekly
 feed reload is a brief outage: vehicles render without delays until the offsets
 finish. If that window matters, build into a new schema and swap.
+
+`python -m app.backfill` recomputes the last `BACKFILL_HOURS` of observations
+from the stored positions. Use it after changing the estimator, or after a feed
+reload, rather than waiting for new data to arrive.
 
 ## Known limitations
 

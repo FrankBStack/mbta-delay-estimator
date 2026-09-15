@@ -33,7 +33,7 @@ MAX_SNAP_ERROR_M = _int("MAX_SNAP_ERROR_M", 150)
 
 RETENTION_HOURS = _int("RETENTION_HOURS", 48)
 
-# trip_update has to outlive this: backfill() re-joins it for feed_delay_s.
+# trip_update has to outlive this: app.backfill re-joins it for feed_delay_s.
 BACKFILL_HOURS = _int("BACKFILL_HOURS", 24)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
