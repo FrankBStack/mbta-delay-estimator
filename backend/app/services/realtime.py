@@ -185,7 +185,8 @@ async def ingest_trip_updates(conn, msg):
              arrival_time, departure_time, delay_s)
         SELECT u.trip_id, u.stop_sequence, u.stop_id, u.route_id, u.start_date, u.ts,
                u.arrival_time, u.departure_time,
-               CASE WHEN st.arrival_s IS NULL OR u.start_date IS NULL THEN NULL
+               CASE WHEN COALESCE(st.arrival_s, st.departure_s) IS NULL
+                      OR u.start_date IS NULL THEN NULL
                     ELSE round(extract(epoch FROM
                              COALESCE(u.arrival_time, u.departure_time)
                              - gtfs_ts(u.start_date,
