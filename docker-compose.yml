@@ -1,0 +1,63 @@
+x-backend: &backend
+  build: ./backend
+  environment: &backend-env
+    DATABASE_URL: postgresql://tracker:tracker@db:5432/tracker
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgis/postgis:17-3.6-alpine
+    environment:
+      POSTGRES_USER: tracker
+      POSTGRES_PASSWORD: tracker
+      POSTGRES_DB: tracker
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # applied once, when the volume is first created, so the API and poller
+      # can start before the feed has been loaded
+      - ./backend/app/schema.sql:/docker-entrypoint-initdb.d/20_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      RUN_POLLER: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  poller:
+    <<: *backend
+    command: python -m app.poller
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-off: `docker compose run --rm load`. Drops and rebuilds every table.
+  load:
+    <<: *backend
+    profiles: [tools]
+    command: python -m app.gtfs_static --keep
+    volumes:
+      - gtfs-cache:/app/.cache
+
+volumes:
+  pgdata:
+  gtfs-cache:

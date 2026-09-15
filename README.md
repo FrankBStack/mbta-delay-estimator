@@ -112,6 +112,20 @@ frontend/src/
   lib/delay.js                      color scale shared by map and legend
 ```
 
+## Running with Docker
+
+```bash
+docker compose up -d --build           # PostGIS, API, poller, and the frontend on localhost:8080
+docker compose run --rm load           # downloads and loads the feed, ~60s; repeat weekly
+```
+
+The schema is applied when the database volume is first created, so the API
+and poller start before the feed has been loaded; vehicles simply carry no
+delay until `load` finishes. nginx serves the built frontend and proxies
+`/api` to the API container on the same origin, so no CORS configuration is
+needed. The poller runs as its own container with `RUN_POLLER=false` on the
+API, matching the [Deployment](#deployment) layout below.
+
 ## Running locally
 
 Requires PostgreSQL with PostGIS, Python 3.11+, and Node 18+.
