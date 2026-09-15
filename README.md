@@ -128,8 +128,7 @@ The schema is applied when the database volume is first created, so the API
 and poller start before the feed has been loaded; vehicles simply carry no
 delay until `load` finishes. nginx serves the built frontend and proxies
 `/api` to the API container on the same origin, so no CORS configuration is
-needed. The poller runs as its own container with `RUN_POLLER=false` on the
-API, matching the [Deployment](#deployment) layout below.
+needed.
 
 ## Running locally
 
@@ -152,10 +151,6 @@ cp .env.example .env
 cd frontend
 npm install && npm run dev              # localhost:5173
 ```
-
-The static load handles 2.2M stop_times, 1,156 route shapes, and 2.2M derived
-stop offsets. Re-run it when the MBTA publishes a new feed (roughly weekly); it
-drops and rebuilds the static tables and leaves the observation history alone.
 
 ### Tests
 
@@ -180,19 +175,17 @@ same rows.
 ```bash
 RUN_POLLER=false uvicorn app.main:app --port 8010   # API, any number of these
 python -m app.poller                                # exactly one of these
+python -m app.gtfs_static                           # weekly, when the MBTA publishes a new feed
+python -m app.backfill                              # rescore stored positions after an estimator change
 ```
 
 `RUN_POLLER` defaults to true so a single local process still works unchanged.
 The poller records its state to `feed_meta` each cycle, so `/api/analytics/health`
 reports the real poller regardless of which process it runs in.
 
-Re-running `app.gtfs_static` drops and rebuilds the static tables, so the weekly
-feed reload is a brief outage: vehicles render without delays until the offsets
+The feed reload drops and rebuilds the static tables, leaving observations
+alone, and is a brief outage: vehicles render without delays until the offsets
 finish. If that window matters, build into a new schema and swap.
-
-`python -m app.backfill` recomputes the last `BACKFILL_HOURS` of observations
-from the stored positions. Use it after changing the estimator, or after a feed
-reload, rather than waiting for new data to arrive.
 
 ## Known limitations
 
@@ -204,13 +197,9 @@ reload, rather than waiting for new data to arrive.
   vehicles overnight against 765 at morning peak), and agreement with the feed
   is measurably weaker at peak. Any single-window figure should be read against
   the service level it was sampled from.
-- `PROJECTED_SRID` is specific to Massachusetts. Targeting another city requires
-  selecting the appropriate local metre-based CRS, not only changing the feed
-  URLs.
-- `backend/tests` covers the estimator's rules — the layover floor,
-  interpolation, ratio clamping, the feed join, the confidence flags — against
-  a synthetic route in a real PostGIS database. The static loader and the
-  poller are exercised only by running them.
+- Distance work is done in EPSG:26986, which is specific to Massachusetts.
+  Targeting another city means changing the SRID in `schema.sql` and
+  `config.py`, not only the feed URLs.
 - The feed comparison is null when no prediction falls within five minutes of an
   observation, rather than reaching for a more distant one. Those rows still
   carry a computed delay, just nothing to compare it against.
