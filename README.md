@@ -194,6 +194,30 @@ reports the real poller regardless of which process it runs in.
 | Interactive docs | `ENABLE_DOCS=false` removes `/docs`, `/redoc`, and `/openapi.json` |
 | Disk | ~7 GB steady state. Alert on table size: a stalled prune is silent otherwise |
 
+### On a single server
+
+`docker-compose.prod.yml` layers Caddy for TLS over the base stack, reads the
+database password and domain from `.env`, disables the interactive docs, and
+caps Postgres memory. It runs on a 2 GB box; add swap for the weekly load.
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+git clone https://github.com/FrankBStack/mbta-delay-estimator.git /opt/tracker && cd /opt/tracker
+cp .env.example .env                    # set POSTGRES_PASSWORD and DOMAIN
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm load
+```
+
+`pull` needs the GHCR packages to be public or a `docker login ghcr.io`;
+otherwise drop it and `up --build` instead. Point the domain's A record at
+the box before `up`, since Caddy requests the certificate on start. Reload the
+feed weekly from cron:
+
+```
+0 4 * * 1 cd /opt/tracker && docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm load
+```
+
 Re-running `app.gtfs_static` drops and rebuilds every table, so the weekly feed
 reload is a brief outage: vehicles render without delays until the offsets
 finish. If that window matters, build into a new schema and swap.

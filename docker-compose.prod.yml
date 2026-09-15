@@ -1,0 +1,45 @@
+# Production overlay. Adds Caddy for TLS, takes the password and domain from
+# .env, and trims memory for a small box.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+x-prod-env: &prod-env
+  DATABASE_URL: postgresql://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker
+
+services:
+  db:
+    command: postgres -c shared_buffers=256MB -c work_mem=8MB -c maintenance_work_mem=128MB
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+  api:
+    environment:
+      <<: *prod-env
+      ENABLE_DOCS: "false"
+      DB_POOL_MIN: "1"
+      DB_POOL_MAX: "4"
+
+  poller:
+    environment:
+      <<: *prod-env
+
+  load:
+    environment:
+      <<: *prod-env
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
