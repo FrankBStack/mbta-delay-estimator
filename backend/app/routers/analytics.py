@@ -162,7 +162,8 @@ async def _divergence(minutes, include_low_confidence):
     result["pct_within_120s"] = (
         round(100.0 * (result.get("within_120s") or 0) / compared, 1) if compared else None
     )
-    result["correlation"] = float(result["correlation"]) if result.get("correlation") else None
+    corr = result.get("correlation")
+    result["correlation"] = float(corr) if corr is not None else None
     result["window_minutes"] = minutes
     result["by_method"] = [dict(m) for m in by_method]
     return result
