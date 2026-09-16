@@ -15,4 +15,7 @@ RUN useradd --system --uid 1000 app && mkdir -p /app/.cache && chown -R app:app 
 USER app
 
 EXPOSE 8010
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]
+# behind nginx and Caddy: trust X-Forwarded-Proto so anything the app builds
+# from the request URL says https, not http
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]
