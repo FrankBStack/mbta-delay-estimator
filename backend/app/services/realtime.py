@@ -142,8 +142,31 @@ async def ingest_vehicles(conn, msg):
     return [r["id"] for r in rows]
 
 
-async def ingest_trip_updates(conn, msg):
+def wanted_stops(vehicles_msg):
+    """(trip_id, stop_sequence) pairs the estimator can join a prediction to:
+    each vehicle's current stop and the one after it, so the join still finds
+    a row once the vehicle advances before the next poll.
+
+    The feed carries every remaining stop of every trip, about 18k rows a
+    poll, and observations only ever join the one they're at. Storing the
+    rest filled 8 GB in twelve hours on the production box.
+    """
+    keep = set()
+    for entity in vehicles_msg.entity:
+        if not entity.HasField("vehicle"):
+            continue
+        v = entity.vehicle
+        if not v.HasField("trip") or not v.trip.trip_id or not v.HasField("current_stop_sequence"):
+            continue
+        keep.add((v.trip.trip_id, v.current_stop_sequence))
+        keep.add((v.trip.trip_id, v.current_stop_sequence + 1))
+    return keep
+
+
+async def ingest_trip_updates(conn, msg, keep=None):
     """Insert predictions and derive a delay for each.
+
+    `keep` is the set from wanted_stops(); None stores everything.
 
     A stop_time_update can carry arrival, departure, both or neither. Each is
     paired with its own scheduled counterpart: delay_s is arrival against
@@ -165,6 +188,8 @@ async def ingest_trip_updates(conn, msg):
         start_date = _date(trip.start_date)
         for stu in tu.stop_time_update:
             if not stu.HasField("stop_sequence"):
+                continue
+            if keep is not None and (trip_id, stu.stop_sequence) not in keep:
                 continue
             arrival = stu.arrival.time if stu.HasField("arrival") and stu.arrival.time else None
             departure = (
@@ -259,14 +284,34 @@ async def check_static_feed(conn, position_ids):
                     " run `python -m app.gtfs_static`", 100 * rate)
 
 
+PRUNE_BATCH = 20_000
+
+
 async def prune(conn):
+    """Delete expired rows in batches, each its own transaction. One DELETE of
+    an hour's worth of rows holds locks and floods the WAL long enough to
+    stall the API on a one-core box."""
     deleted = {}
     for table, hours in RETENTION.items():
-        status = await conn.execute(
-            f"DELETE FROM {table} WHERE ts < now() - ($1 || ' hours')::interval",
-            str(hours),
-        )
-        deleted[table] = int(status.split()[-1])
+        total = 0
+        while True:
+            status = await conn.execute(
+                f"""
+                DELETE FROM {table}
+                WHERE ctid = ANY(ARRAY(
+                    SELECT ctid FROM {table}
+                    WHERE ts < now() - ($1 || ' hours')::interval
+                    LIMIT {PRUNE_BATCH}
+                ))
+                """,
+                str(hours),
+            )
+            n = int(status.split()[-1])
+            total += n
+            if n < PRUNE_BATCH:
+                break
+            await asyncio.sleep(0.05)
+        deleted[table] = total
     return deleted
 
 
@@ -319,7 +364,7 @@ async def poll_once(client):
         async with conn.transaction():
             # predictions first, so the delay pass can join against them in the
             # same poll rather than lagging a cycle behind
-            updates = await ingest_trip_updates(conn, updates_msg)
+            updates = await ingest_trip_updates(conn, updates_msg, wanted_stops(vehicles_msg))
             new_ids = await ingest_vehicles(conn, vehicles_msg)
             computed = await delay.compute(conn, new_ids) if new_ids else 0
             if new_ids:

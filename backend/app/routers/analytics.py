@@ -38,6 +38,7 @@ async def delay_by_route(
     return await cache.get_or_set(
         ("delay-by-route", minutes, route_type, min_observations, include_low_confidence),
         lambda: _delay_by_route(minutes, route_type, min_observations, include_low_confidence),
+        ttl_s=ANALYTICS_TTL_S,
     )
 
 
@@ -115,15 +116,26 @@ async def divergence(
     return await cache.get_or_set(
         ("divergence", minutes, include_low_confidence),
         lambda: _divergence(minutes, include_low_confidence),
+        ttl_s=ANALYTICS_TTL_S,
     )
 
 
+# The page polls analytics every 30s, so a shorter cache just re-runs the
+# window scan for nothing.
+ANALYTICS_TTL_S = 30
+
+# A hash aggregate over the window, then a PK join back: far cheaper than a
+# DISTINCT ON sort of every row in the window.
 THINNED = f"""
-    SELECT DISTINCT ON (d.vehicle_id, date_trunc('minute', d.ts)) d.*
-    FROM delay_observation d
-    WHERE d.ts > now() - ($1 || ' minutes')::interval
-      AND {CONFIDENCE_FILTER}
-    ORDER BY d.vehicle_id, date_trunc('minute', d.ts), d.ts DESC
+    SELECT d.*
+    FROM (
+        SELECT max(d.id) AS id
+        FROM delay_observation d
+        WHERE d.ts > now() - ($1 || ' minutes')::interval
+          AND {CONFIDENCE_FILTER}
+        GROUP BY d.vehicle_id, date_trunc('minute', d.ts)
+    ) k
+    JOIN delay_observation d ON d.id = k.id
 """
 
 
@@ -197,6 +209,7 @@ async def timeline(
     return await cache.get_or_set(
         ("timeline", minutes, bucket_minutes, route_id, include_low_confidence),
         lambda: _timeline(minutes, bucket_minutes, route_id, include_low_confidence),
+        ttl_s=ANALYTICS_TTL_S,
     )
 
 
