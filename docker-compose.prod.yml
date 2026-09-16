@@ -52,7 +52,10 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # the directory, not the file: git replaces the file with a new inode on
+      # pull, and a single-file bind mount keeps pointing at the old one, so
+      # `caddy reload` would silently reload the previous config
+      - ./deploy:/etc/caddy:ro
       - caddy-data:/data
     depends_on:
       - web
