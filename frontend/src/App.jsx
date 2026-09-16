@@ -27,6 +27,19 @@ const MODES = [
 
 const WINDOWS = [15, 60, 180];
 
+// Ticks on its own so the age counts up between polls without re-rendering
+// the map every second.
+function FeedAge({ ts }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!ts) return undefined;
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [ts]);
+  const age = secondsAgo(ts);
+  return age === null ? null : ` · ${age}s old`;
+}
+
 export default function App() {
   const [vehicles, setVehicles] = useState(null);
   const [health, setHealth] = useState(null);
@@ -160,7 +173,7 @@ export default function App() {
               {health?.poller?.feed_timestamp
                 ? `feed ${formatClock(health.poller.feed_timestamp)}`
                 : "connecting…"}
-              {feedAge !== null && ` · ${feedAge}s old`}
+              <FeedAge ts={health?.poller?.feed_timestamp} />
             </p>
           </div>
         </div>

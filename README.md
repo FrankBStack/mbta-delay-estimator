@@ -10,7 +10,7 @@ agency feed. Over a weekday morning peak the computed figure lands within a
 minute of the MBTA's own prediction 90% of the time, with a median difference
 of nine seconds; see [Validation](#validation).
 
-![Live map of Boston with vehicles colored by delay, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/screenshot.png)
+![Live map of Boston with vehicles colored by delay and moving between polls, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/demo.gif)
 
 GTFS-realtime protobuf feeds are polled into PostGIS by a FastAPI service; a
 React + MapLibre frontend consumes the REST API. The MBTA's realtime feeds
