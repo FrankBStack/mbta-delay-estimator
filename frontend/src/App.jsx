@@ -15,6 +15,8 @@ import {
 } from "./lib/status.js";
 
 const ANALYTICS_POLL_MS = 30000;
+// One failed poll is noise; the banner waits for the next one to fail too.
+const ERROR_AFTER_FAILURES = 2;
 const DEV_HOST = /^(localhost|127\.0\.0\.1)$/;
 
 const MODES = [
@@ -65,6 +67,7 @@ export default function App() {
     let alive = true;
     let timer;
     let delay = POLL_STEPS_MS[0];
+    let failures = 0;
     const tick = async () => {
       let ok = false;
       try {
@@ -78,9 +81,11 @@ export default function App() {
         setVehicles((prev) => keepLastGood(prev, v, feedStale));
         setHealth(h);
         setError(null);
+        failures = 0;
         ok = true;
       } catch (e) {
-        if (alive) setError(e.message);
+        failures += 1;
+        if (alive && failures >= ERROR_AFTER_FAILURES) setError(e.message);
       } finally {
         if (alive) {
           setLoading(false);
@@ -100,6 +105,7 @@ export default function App() {
   useEffect(() => {
     let alive = true;
     let timer;
+    let failures = 0;
     const tick = async () => {
       try {
         const [d, dv] = await Promise.all([
@@ -113,8 +119,10 @@ export default function App() {
         if (!alive) return;
         setDelayRoutes(d.routes);
         setDivergence(dv);
+        failures = 0;
       } catch (e) {
-        if (alive) setError(e.message);
+        failures += 1;
+        if (alive && failures >= ERROR_AFTER_FAILURES) setError(e.message);
       } finally {
         if (alive) timer = setTimeout(tick, ANALYTICS_POLL_MS);
       }

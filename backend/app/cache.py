@@ -12,7 +12,19 @@ from typing import Any
 from .config import CACHE_MAX_ENTRIES, CACHE_TTL_S
 
 _entries: dict[Hashable, tuple[float, Any]] = {}
-_lock = asyncio.Lock()
+
+
+# One lock per key, kept only while someone is using it. A slow analytics
+# query must not hold up a miss on the vehicle poll.
+class _KeyLock:
+    __slots__ = ("lock", "users")
+
+    def __init__(self) -> None:
+        self.lock = asyncio.Lock()
+        self.users = 0
+
+
+_locks: dict[Hashable, _KeyLock] = {}
 
 
 def _evict(now: float) -> None:
@@ -36,18 +48,28 @@ async def get_or_set(
     if hit and hit[0] > now:
         return hit[1]
 
-    # single lock: one slow producer briefly blocks other misses, which is the
-    # price of never stampeding the database on expiry
-    async with _lock:
-        hit = _entries.get(key)
-        now = time.monotonic()
-        if hit and hit[0] > now:
-            return hit[1]
-        value = await producer()
-        _evict(now)
-        _entries[key] = (time.monotonic() + ttl, value)
-        return value
+    # misses on the same key wait for one producer rather than stampeding the
+    # database on expiry; misses on other keys proceed independently
+    kl = _locks.get(key)
+    if kl is None:
+        kl = _locks[key] = _KeyLock()
+    kl.users += 1
+    try:
+        async with kl.lock:
+            hit = _entries.get(key)
+            now = time.monotonic()
+            if hit and hit[0] > now:
+                return hit[1]
+            value = await producer()
+            _evict(now)
+            _entries[key] = (time.monotonic() + ttl, value)
+            return value
+    finally:
+        kl.users -= 1
+        if kl.users == 0 and _locks.get(key) is kl:
+            del _locks[key]
 
 
 def clear() -> None:
     _entries.clear()
+    _locks.clear()

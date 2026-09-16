@@ -1,9 +1,27 @@
+export const RETRY_DELAY_MS = 400;
+
+// A request that dies before any response is almost always a kept-alive
+// connection the network dropped while the tab sat idle. One retry opens a
+// fresh connection; a real outage fails the retry too.
+async function fetchOnceMore(url) {
+  try {
+    return await fetch(url);
+  } catch (first) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    try {
+      return await fetch(url);
+    } catch {
+      throw first;
+    }
+  }
+}
+
 async function get(path, params = {}) {
   const qs = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== null && v !== undefined)
   );
   const url = qs.toString() ? `${path}?${qs}` : path;
-  const resp = await fetch(url);
+  const resp = await fetchOnceMore(url);
   if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText} on ${url}`);
   return resp.json();
 }

@@ -128,7 +128,9 @@ async def divergence(
 ANALYTICS_TTL_S = 30
 
 # A hash aggregate over the window, then a PK join back: far cheaper than a
-# DISTINCT ON sort of every row in the window.
+# DISTINCT ON sort of every row in the window. The join side repeats the time
+# bound so the planner reads the window through the ts index instead of
+# hashing the whole table; that alone halves the query on a small box.
 THINNED = f"""
     SELECT d.*
     FROM (
@@ -138,7 +140,8 @@ THINNED = f"""
           AND {CONFIDENCE_FILTER}
         GROUP BY d.vehicle_id, date_trunc('minute', d.ts)
     ) k
-    JOIN delay_observation d ON d.id = k.id
+    JOIN delay_observation d
+      ON d.id = k.id AND d.ts > now() - ($1 || ' minutes')::interval
 """
 
 
