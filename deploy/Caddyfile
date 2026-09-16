@@ -1,5 +1,16 @@
 {$DOMAIN} {
     encode gzip
+
+    # access log to stdout, so `docker compose logs caddy` shows every request
+    # with its status, not only errors
+    log {
+        output stdout
+    }
+
+    # browsers rewrite any http:// URL for this host to https before fetching,
+    # which covers any redirect a backend builds with the wrong scheme
+    header Strict-Transport-Security "max-age=31536000"
+
     # retry the upstream dial while the web container is being recreated,
     # instead of answering 502 for the few seconds it is down
     reverse_proxy web:80 {
