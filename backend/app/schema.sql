@@ -152,6 +152,10 @@ CREATE TABLE IF NOT EXISTS trip_update (
     delay_s       integer,
     PRIMARY KEY (trip_id, stop_sequence, ts)
 );
+-- delay_s pairs the predicted arrival with the scheduled arrival (departure
+-- with departure where the prediction has no arrival); departure_delay_s
+-- pairs departure with departure, for vehicles measured against a departure.
+ALTER TABLE trip_update ADD COLUMN IF NOT EXISTS departure_delay_s integer;
 -- the (trip_id, stop_sequence, ts) PK already covers the per-stop lookup
 CREATE INDEX IF NOT EXISTS trip_update_ts_idx ON trip_update (ts DESC);
 

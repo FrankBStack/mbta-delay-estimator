@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { median, noun } from "./Headline.jsx";
+import { median, noun, splitDelays } from "./Headline.jsx";
+
+const feature = (props) => ({ properties: props });
 
 describe("noun", () => {
   it("names the mode the filter selected", () => {
@@ -37,5 +39,35 @@ describe("median", () => {
     const input = [3, 1, 2];
     median(input);
     expect(input).toEqual([3, 1, 2]);
+  });
+});
+
+describe("splitDelays", () => {
+  it("counts idle layovers separately instead of as on time", () => {
+    const { delays, waiting } = splitDelays([
+      feature({ method: "layover", computed_delay_s: 0 }),
+      feature({ method: "layover", computed_delay_s: 0 }),
+      feature({ method: "interpolated", computed_delay_s: 90 }),
+      feature({ method: "stopped_at", computed_delay_s: -30 }),
+    ]);
+    expect(delays).toEqual([90, -30]);
+    expect(waiting).toBe(2);
+  });
+
+  it("keeps a layover that is late leaving", () => {
+    const { delays, waiting } = splitDelays([
+      feature({ method: "layover", computed_delay_s: 200 }),
+    ]);
+    expect(delays).toEqual([200]);
+    expect(waiting).toBe(0);
+  });
+
+  it("drops vehicles with no figure", () => {
+    const { delays, waiting } = splitDelays([
+      feature({ method: null, computed_delay_s: null }),
+      feature({ method: "interpolated" }),
+    ]);
+    expect(delays).toEqual([]);
+    expect(waiting).toBe(0);
   });
 });

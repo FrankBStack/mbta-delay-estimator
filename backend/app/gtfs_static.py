@@ -345,12 +345,21 @@ async def run(zip_path, keep):
                 cal, dates = await load_calendar(conn, feed)
                 print(f"  {'calendar':<12} {cal:>9,}  (+{dates:,} exceptions)")
 
-                await conn.execute(
-                    "INSERT INTO feed_meta (key, value) VALUES ('loaded_at', $1),"
-                    " ('source', $2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                    dt.datetime.now(dt.timezone.utc).isoformat(),
-                    GTFS_STATIC_URL,
+                info = next(iter(feed.rows("feed_info.txt")), {})
+                end_date = parse_date(info.get("feed_end_date", ""))
+                meta = {
+                    "loaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    "source": GTFS_STATIC_URL,
+                    "feed_version": info.get("feed_version") or "",
+                    "feed_end_date": end_date.isoformat() if end_date else "",
+                }
+                await conn.executemany(
+                    "INSERT INTO feed_meta (key, value) VALUES ($1, $2)"
+                    " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                    list(meta.items()),
                 )
+                if meta["feed_version"]:
+                    print(f"  feed {meta['feed_version']}, valid to {meta['feed_end_date']}")
 
             print("analyzing")
             for table in ("stop_time", "trip", "shape", "stop"):

@@ -12,6 +12,7 @@ export default function DivergencePanel({ divergence }) {
   const {
     correlation,
     mean_divergence_s,
+    stddev_divergence_s,
     pct_within_60s,
     compared,
     by_method,
@@ -23,28 +24,35 @@ export default function DivergencePanel({ divergence }) {
         <div>
           <h3>Our number vs the MBTA's</h3>
           <p className="muted small">
-            {compared.toLocaleString()} observations where both exist
+            {compared.toLocaleString()} observations where both exist, one per
+            vehicle per minute
           </p>
         </div>
       </div>
 
       <div className="tiles">
         <Tile
-          value={correlation !== null ? correlation.toFixed(3) : "—"}
-          label="Correlation"
-          hint="1.0 = perfect agreement on which vehicles are late"
+          value={pct_within_60s !== null ? `${pct_within_60s}%` : "—"}
+          label="Within 60s"
+          hint="Share of observations agreeing to within a minute"
+        />
+        <Tile
+          value={stddev_divergence_s !== null ? `${stddev_divergence_s}s` : "—"}
+          label="Spread (σ)"
+          hint="Standard deviation of the difference between the two figures"
         />
         <Tile
           value={formatSigned(mean_divergence_s)}
           label="Mean difference"
           hint="Positive = we read later than the feed does"
         />
-        <Tile
-          value={pct_within_60s !== null ? `${pct_within_60s}%` : "—"}
-          label="Within 60s"
-          hint="Share of observations agreeing to within a minute"
-        />
       </div>
+      {correlation !== null && correlation !== undefined && (
+        <p className="muted small">
+          Correlation r = {correlation.toFixed(3)}. Both figures share the same
+          schedule baseline, so a high r is expected; the spread is the better test.
+        </p>
+      )}
 
       {by_method?.length > 0 && (
         <table className="data-table tight">

@@ -21,10 +21,26 @@ export function median(values) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+// A vehicle waiting at its origin ahead of departure reads as exactly zero,
+// which says nothing about how late the fleet is, so it's counted separately.
+export function isWaiting(p) {
+  return p.method === "layover" && p.computed_delay_s === 0;
+}
+
+export function splitDelays(features) {
+  const delays = [];
+  let waiting = 0;
+  for (const f of features) {
+    const p = f.properties;
+    if (p.computed_delay_s === null || p.computed_delay_s === undefined) continue;
+    if (isWaiting(p)) waiting += 1;
+    else delays.push(p.computed_delay_s);
+  }
+  return { delays, waiting };
+}
+
 export default function Headline({ vehicles, divergence, windowMinutes, routeType }) {
-  const delays = (vehicles?.features ?? [])
-    .map((f) => f.properties.computed_delay_s)
-    .filter((d) => d !== null && d !== undefined);
+  const { delays, waiting } = splitDelays(vehicles?.features ?? []);
 
   if (!delays.length) {
     return (
@@ -40,7 +56,8 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
 
   const typical = Math.round(median(delays));
   const late = delays.filter((d) => d > 300).length;
-  const corr = divergence?.correlation;
+  const within = divergence?.pct_within_60s;
+  const spread = divergence?.stddev_divergence_s;
 
   return (
     <div className="hero">
@@ -49,12 +66,14 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
         {formatDelay(typical)}
       </div>
       <p className="muted small">
-        Median of {delays.length} {noun(routeType, delays.length)} placed against the timetable
+        Median of {delays.length} {noun(routeType, delays.length)} in service
         {late > 0 && ` · ${late} more than 5 min late`}
+        {waiting > 0 && ` · ${waiting} waiting at origin`}
       </p>
-      {corr !== null && corr !== undefined && (
+      {within !== null && within !== undefined && (
         <p className="muted small">
-          Agrees with the MBTA's own predictions at r = {corr.toFixed(3)} over
+          Within a minute of the MBTA's own prediction {within}% of the time
+          {spread !== null && spread !== undefined && ` (σ ${spread}s)`} over
           the last {windowMinutes} min
         </p>
       )}

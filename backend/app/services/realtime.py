@@ -11,6 +11,7 @@ import json
 import logging
 
 import httpx
+from zoneinfo import ZoneInfo
 from google.transit import gtfs_realtime_pb2 as gtfs_rt
 
 from .. import db
@@ -40,7 +41,13 @@ STATE = {
     "polls": 0,
     "last_prune": None,
     "last_prune_error": None,
+    "trip_match_rate": None,
+    "static_feed_end_date": None,
 }
+
+# below this share of scheduled trips matching the loaded feed, the static
+# tables are almost certainly from an old rating
+MIN_TRIP_MATCH_RATE = 0.5
 
 RETENTION = {
     "vehicle_position": RETENTION_HOURS,
@@ -138,8 +145,11 @@ async def ingest_vehicles(conn, msg):
 async def ingest_trip_updates(conn, msg):
     """Insert predictions and derive a delay for each.
 
-    A stop_time_update can carry arrival, departure, both or neither. Prefer
-    arrival, fall back to departure.
+    A stop_time_update can carry arrival, departure, both or neither. Each is
+    paired with its own scheduled counterpart: delay_s is arrival against
+    scheduled arrival (departure against scheduled departure where the
+    prediction has no arrival, which is how the MBTA publishes first stops),
+    departure_delay_s is departure against scheduled departure.
     """
     feed_ts = _utc(msg.header.timestamp) if msg.header.timestamp else _utc(0)
     cols = [[] for _ in range(8)]
@@ -180,25 +190,36 @@ async def ingest_trip_updates(conn, msg):
     # predicted minus scheduled, positive = late
     rows = await conn.fetch(
         """
-        INSERT INTO trip_update
-            (trip_id, stop_sequence, stop_id, route_id, start_date, ts,
-             arrival_time, departure_time, delay_s)
-        SELECT u.trip_id, u.stop_sequence, u.stop_id, u.route_id, u.start_date, u.ts,
-               u.arrival_time, u.departure_time,
-               CASE WHEN COALESCE(st.arrival_s, st.departure_s) IS NULL
-                      OR u.start_date IS NULL THEN NULL
-                    ELSE round(extract(epoch FROM
-                             COALESCE(u.arrival_time, u.departure_time)
-                             - gtfs_ts(u.start_date,
-                                       COALESCE(st.arrival_s, st.departure_s),
-                                       $9::text)))::integer
-               END
-        FROM unnest($1::text[], $2::integer[], $3::text[], $4::text[], $5::date[],
+        WITH paired AS (
+            SELECT u.*,
+                   CASE WHEN u.start_date IS NULL THEN NULL
+                        WHEN u.arrival_time IS NOT NULL AND st.arrival_s IS NOT NULL
+                            THEN u.arrival_time
+                                 - gtfs_ts(u.start_date, st.arrival_s, $9::text)
+                        WHEN u.departure_time IS NOT NULL AND st.departure_s IS NOT NULL
+                            THEN u.departure_time
+                                 - gtfs_ts(u.start_date, st.departure_s, $9::text)
+                   END AS arrival_delay,
+                   CASE WHEN u.start_date IS NULL THEN NULL
+                        WHEN u.departure_time IS NOT NULL AND st.departure_s IS NOT NULL
+                            THEN u.departure_time
+                                 - gtfs_ts(u.start_date, st.departure_s, $9::text)
+                   END AS departure_delay
+            FROM unnest($1::text[], $2::integer[], $3::text[], $4::text[], $5::date[],
                     $6::timestamptz[], $7::timestamptz[], $8::timestamptz[])
              AS u(trip_id, stop_sequence, stop_id, route_id, start_date, ts,
                   arrival_time, departure_time)
-        LEFT JOIN stop_time st
-               ON st.trip_id = u.trip_id AND st.stop_sequence = u.stop_sequence
+            LEFT JOIN stop_time st
+                   ON st.trip_id = u.trip_id AND st.stop_sequence = u.stop_sequence
+        )
+        INSERT INTO trip_update
+            (trip_id, stop_sequence, stop_id, route_id, start_date, ts,
+             arrival_time, departure_time, delay_s, departure_delay_s)
+        SELECT trip_id, stop_sequence, stop_id, route_id, start_date, ts,
+               arrival_time, departure_time,
+               round(extract(epoch FROM arrival_delay))::integer,
+               round(extract(epoch FROM departure_delay))::integer
+        FROM paired
         ON CONFLICT (trip_id, stop_sequence, ts) DO NOTHING
         RETURNING 1
         """,
@@ -206,6 +227,36 @@ async def ingest_trip_updates(conn, msg):
         AGENCY_TZ,
     )
     return len(rows)
+
+
+async def check_static_feed(conn, position_ids):
+    """How many of this poll's scheduled trips exist in the loaded feed, and
+    whether that feed is still in date. Trip ids change with every rating,
+    so a stale feed shows up here as vehicles quietly losing their delay."""
+    row = await conn.fetchrow(
+        """
+        SELECT count(*) FILTER (WHERE t.trip_id IS NOT NULL) AS matched,
+               count(*)                                      AS scheduled,
+               (SELECT value FROM feed_meta WHERE key = 'feed_end_date') AS end_date
+        FROM vehicle_position vp
+        LEFT JOIN trip t ON t.trip_id = vp.trip_id
+        WHERE vp.id = ANY($1::bigint[])
+          AND vp.trip_id IS NOT NULL
+          AND vp.trip_id NOT LIKE 'ADDED%'
+        """,
+        position_ids,
+    )
+    rate = row["matched"] / row["scheduled"] if row and row["scheduled"] else None
+    end_date = row["end_date"] if row else None
+    STATE["trip_match_rate"] = None if rate is None else round(rate, 3)
+    STATE["static_feed_end_date"] = end_date
+
+    today = dt.datetime.now(dt.timezone.utc).astimezone(ZoneInfo(AGENCY_TZ)).date()
+    if end_date and dt.date.fromisoformat(end_date) < today:
+        log.warning("static feed expired %s; run `python -m app.gtfs_static`", end_date)
+    elif rate is not None and rate < MIN_TRIP_MATCH_RATE:
+        log.warning("only %.0f%% of scheduled trips match the loaded feed;"
+                    " run `python -m app.gtfs_static`", 100 * rate)
 
 
 async def prune(conn):
@@ -234,6 +285,8 @@ def snapshot():
         "last_error": STATE["last_error"],
         "last_prune": iso(STATE["last_prune"]),
         "last_prune_error": STATE["last_prune_error"],
+        "trip_match_rate": STATE["trip_match_rate"],
+        "static_feed_end_date": STATE["static_feed_end_date"],
     }
 
 
@@ -269,6 +322,8 @@ async def poll_once(client):
             updates = await ingest_trip_updates(conn, updates_msg)
             new_ids = await ingest_vehicles(conn, vehicles_msg)
             computed = await delay.compute(conn, new_ids) if new_ids else 0
+            if new_ids:
+                await check_static_feed(conn, new_ids)
 
     STATE.update(
         last_poll=dt.datetime.now(dt.timezone.utc),

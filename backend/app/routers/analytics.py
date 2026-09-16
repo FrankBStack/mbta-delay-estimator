@@ -3,6 +3,10 @@
 Low-confidence observations are excluded unless you ask for them: those are the
 ones where the vehicle was too far off its shape to place, or where the numbers
 came out implausible enough to suggest the wrong service date.
+
+Vehicles waiting at their origin ahead of departure are excluded from every
+aggregate. They read as exactly zero, which says nothing about lateness and
+drags a fleet median toward "on time".
 """
 
 from typing import Optional
@@ -14,7 +18,10 @@ from ..services import realtime
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
-CONFIDENCE_FILTER = "d.confidence = ANY($2::text[])"
+CONFIDENCE_FILTER = (
+    "d.confidence = ANY($2::text[])"
+    " AND NOT (d.method = 'layover' AND d.computed_delay_s = 0)"
+)
 
 
 def _levels(include_low):
@@ -98,18 +105,32 @@ async def divergence(
     minutes: int = Query(60, ge=5, le=1440),
     include_low_confidence: bool = False,
 ):
-    """How closely our number tracks the MBTA's. Correlation is the one to read
-    first -- near 1.0 and the residual is the interesting part, low and the
-    geometry approach is measuring something else entirely."""
+    """How closely our number tracks the MBTA's. Read the spread and the share
+    within 60s first. Correlation is reported but is a weak test here: both
+    figures share the same schedule baseline and vehicle position, and delays
+    span several minutes, so a high r is nearly guaranteed.
+
+    Thinned to one observation per vehicle per minute. Consecutive 15s reports
+    from the same vehicle are near-duplicates and would overstate the sample."""
     return await cache.get_or_set(
         ("divergence", minutes, include_low_confidence),
         lambda: _divergence(minutes, include_low_confidence),
     )
 
 
+THINNED = f"""
+    SELECT DISTINCT ON (d.vehicle_id, date_trunc('minute', d.ts)) d.*
+    FROM delay_observation d
+    WHERE d.ts > now() - ($1 || ' minutes')::interval
+      AND {CONFIDENCE_FILTER}
+    ORDER BY d.vehicle_id, date_trunc('minute', d.ts), d.ts DESC
+"""
+
+
 async def _divergence(minutes, include_low_confidence):
     row = await db.pool().fetchrow(
         f"""
+        WITH d AS ({THINNED})
         SELECT count(*)                                          AS observations,
                count(*) FILTER (WHERE d.divergence_s IS NOT NULL) AS compared,
                round(avg(d.computed_delay_s))::int                AS mean_computed_s,
@@ -127,9 +148,7 @@ async def _divergence(minutes, include_low_confidence):
                round(corr(d.computed_delay_s, d.feed_delay_s)::numeric, 4) AS correlation,
                count(*) FILTER (WHERE abs(d.divergence_s) <= 60)  AS within_60s,
                count(*) FILTER (WHERE abs(d.divergence_s) <= 120) AS within_120s
-        FROM delay_observation d
-        WHERE d.ts > now() - ($1 || ' minutes')::interval
-          AND {CONFIDENCE_FILTER}
+        FROM d
         """,
         str(minutes),
         _levels(include_low_confidence),
@@ -137,6 +156,7 @@ async def _divergence(minutes, include_low_confidence):
 
     by_method = await db.pool().fetch(
         f"""
+        WITH d AS ({THINNED})
         SELECT d.method,
                count(*)                                           AS observations,
                round(avg(d.divergence_s) FILTER (WHERE d.divergence_s IS NOT NULL))::int
@@ -144,9 +164,7 @@ async def _divergence(minutes, include_low_confidence):
                round(avg(abs(d.divergence_s)) FILTER (WHERE d.divergence_s IS NOT NULL))::int
                                                                   AS mean_abs_divergence_s,
                round(avg(d.snap_error_m)::numeric, 1)             AS mean_snap_error_m
-        FROM delay_observation d
-        WHERE d.ts > now() - ($1 || ' minutes')::interval
-          AND {CONFIDENCE_FILTER}
+        FROM d
         GROUP BY d.method
         ORDER BY count(*) DESC
         """,
@@ -233,7 +251,9 @@ async def _health():
                  WHERE ts > now() - interval '60 minutes')     AS recent_delays,
                (SELECT count(*) FROM vehicle_position)         AS total_positions,
                (SELECT count(*) FROM trip)                     AS trips,
-               (SELECT value FROM feed_meta WHERE key = 'loaded_at') AS gtfs_loaded_at
+               (SELECT value FROM feed_meta WHERE key = 'loaded_at') AS gtfs_loaded_at,
+               (SELECT value FROM feed_meta WHERE key = 'feed_version') AS gtfs_version,
+               (SELECT value FROM feed_meta WHERE key = 'feed_end_date') AS gtfs_end_date
         """
     )
     # from the database, so this reports the real poller whether it runs in

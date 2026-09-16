@@ -10,12 +10,23 @@ figures answer different questions (ours is how late a vehicle is right now,
 theirs is how late it will be on arrival), so the interesting part is where and
 why they diverge.
 
-The tables below predate a correction to the feed join (`with_feed` in
-`app/services/delay.py`), which took the newest prediction for a stop rather
-than the contemporaneous one, so treat their exact figures as approximate;
-they're kept because they document how the estimator was debugged. Re-measured
-after the correction over a weekday evening peak: correlation 0.9935, mean
+The tables below predate two corrections to the estimator, so treat their exact
+figures as approximate; they're kept because they document how it was debugged.
+The first fixed the feed join (`with_feed` in `app/services/delay.py`), which
+took the newest prediction for a stop rather than the contemporaneous one.
+Re-measured after that over a weekday evening peak: correlation 0.9935, mean
 divergence +19s, σ 50s, 88.8% within 60s (87,461 compared observations).
+
+The second is the dwell hold: `stopped_at` now records the deviation at the
+arrival event and holds it, rather than measuring against the clock. The
+`stopped_at` row in the peak table below is the case it addresses. The +19s
+mean divergence was mostly this: recomputing the same observations against
+predicted arrival gave +34s, against predicted departure −17s, for both the
+`stopped_at` and `interpolated` classes, which is what you get from comparing a
+during-dwell clock reading against an at-arrival figure. Idle layovers (method
+`layover`, delay 0) are now excluded from all aggregates, and `first_stop` is
+floored at zero like `layover`, which the −127s in the peak table called for.
+Figures after these changes are not yet in this document.
 
 ## The first-stop bug
 
@@ -65,9 +76,10 @@ spread between the two methods roughly doubles. That's expected, since
 congestion and boarding add variance that a position-derived figure and a
 forward-looking prediction absorb differently.
 
-The offset itself is systematic rather than noise: predictions bake in expected
-recovery (schedule padding, time made up on an express segment), so the
-position-derived figure reads consistently later.
+The offset itself is systematic rather than noise. It was first read as
+predictions baking in expected recovery; the later pairing analysis above
+attributes most of it to comparing a dwelling vehicle against its recorded
+arrival.
 
 Breaking the peak window down by placement method shows where the spread is:
 
@@ -78,11 +90,11 @@ Breaking the peak window down by placement method shows where the spread is:
 | `layover` | 1,209 | −1s | 3s |
 | `first_stop` | 16 | −127s | 127s |
 
-Most of it is `stopped_at`. While a vehicle sits at a stop, our figure keeps
-growing (it's measured against that stop's scheduled arrival and time keeps
-passing), while the agency has already recorded the arrival and moved its
-prediction to the next stop. Long peak dwells widen the gap, but it follows
-from the two definitions rather than being a bug.
+Most of it is `stopped_at`. While a vehicle sat at a stop, our figure kept
+growing (it was measured against that stop's scheduled arrival and time kept
+passing), while the agency had already recorded the arrival. Since the MBTA
+schedules no dwell at all but a handful of stops, this made the figure sawtooth
+by the dwell at every stop. It is now held at the arrival deviation; see above.
 
 `layover` holds at 3s mean absolute divergence even at peak, which suggests the
 departure-based rule is right.

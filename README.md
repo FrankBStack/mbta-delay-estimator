@@ -6,8 +6,11 @@ Real-time map of Boston transit vehicles. Delays are computed from each
 vehicle's physical position against the published timetable, not read from the
 agency feed.
 
-The computed figure agrees with the MBTA's own predictions at r = 0.99 over a
-weekday evening peak; see [Validation](#validation) below.
+Over a weekday evening peak the computed figure lands within a minute of the
+MBTA's own prediction 88.8% of the time (σ 50s); see [Validation](#validation)
+below. Those figures predate the dwell hold described under
+[Placing a vehicle on its route](#placing-a-vehicle-on-its-route) and will be
+re-measured.
 
 ![Live map of Boston with vehicles colored by delay, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/screenshot.png)
 
@@ -58,9 +61,21 @@ Each observation records which method produced it:
 | Method | Description |
 |---|---|
 | `interpolated` | In transit; scheduled time prorated along the shape between two stops |
-| `stopped_at` | Stopped at a mid-route stop; that stop's scheduled time exactly |
+| `stopped_at` | Stopped at a mid-route stop; the deviation at the moment it arrived, held for the dwell |
 | `layover` | Stopped at the trip's first stop; measured against scheduled departure, floored at zero |
-| `first_stop` | Approaching the first stop, with no preceding stop to interpolate from |
+| `first_stop` | Approaching the first stop, with no preceding stop to interpolate from; floored at zero |
+
+The MBTA schedules arrival equal to departure at all but 92 of its 2.2M stop
+times, so boarding time is folded into the travel segments. Measured against
+the clock, a vehicle sitting at a stop would read one second later for every
+second it dwells, then appear to catch up along the next leg. `stopped_at`
+therefore measures the deviation once, when the vehicle first reports itself
+stopped, and holds it until it moves. The catch-up along the leg remains, and
+is real: the timetable does expect the vehicle to have left.
+
+A vehicle waiting at its origin ahead of departure reads as exactly zero. That
+says nothing about lateness, so the headline median and the analytics leave
+those out and the headline counts them separately.
 
 Observations are marked low confidence where the vehicle sits more than 150m
 from the shape it reports running, or where the result exceeds three hours —
@@ -72,12 +87,21 @@ Stop-to-shape snap error across the loaded feed: mean 7.0m, p95 11.9m.
 ## Validation
 
 Since the MBTA publishes no delay field, its figure is derived for comparison
-as predicted arrival minus scheduled arrival for the same trip and stop. Over a
-weekday evening peak (87,461 paired observations) the two agree at correlation
-0.9935, mean divergence +19s, 88.8% within 60s. They answer different
-questions (ours is how late a vehicle is right now, theirs is how late it will
-be on arrival), so they diverge most during long dwells and at peak service,
-where correlation drops to 0.96 against 0.99 overnight.
+from the same trip and stop: predicted arrival against scheduled arrival, or
+predicted departure against scheduled departure for a vehicle on layover, which
+is measured against its departure. Over a weekday evening peak (87,461 paired
+observations) the two agreed to within 60s 88.8% of the time, with σ 50s and a
+mean divergence of +19s. Most of that offset came from comparing a dwelling
+vehicle's clock reading against the feed's recorded arrival; the dwell hold
+above removes it. They answer different questions (ours is how late a vehicle
+is right now, theirs is how late it will be on arrival), so they diverge most
+at peak service.
+
+Correlation is reported but is a weak test here. Both figures share the same
+schedule baseline and vehicle position, and delays span several minutes, so an
+r above 0.99 is nearly guaranteed. The divergence statistics are thinned to one
+observation per vehicle per minute; consecutive 15s reports from one vehicle
+are near-duplicates.
 
 [docs/validation.md](docs/validation.md) has the full breakdown: agreement by
 service level and placement method, per-route examples, and a bug in
@@ -198,6 +222,10 @@ finish. If that window matters, build into a new schema and swap.
   is measurably weaker at peak. Any single-window figure should be read against
   the service level it was sampled from.
 - Distance work is done in EPSG:26986, which is specific to Massachusetts.
+- Trip ids change with every MBTA rating, so a stale static feed shows up as
+  vehicles quietly losing their delay. The poller warns when the loaded feed's
+  `feed_end_date` has passed or fewer than half of the scheduled trips it sees
+  match, and `/api/analytics/health` reports both.
   Targeting another city means changing the SRID in `schema.sql` and
   `config.py`, not only the feed URLs.
 - The feed comparison is null when no prediction falls within five minutes of an

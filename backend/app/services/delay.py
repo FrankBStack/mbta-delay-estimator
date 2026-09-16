@@ -47,7 +47,8 @@ bracketed AS (
            cur.frac         AS cur_frac,
            prev.departure_s AS prev_departure_s,
            prev.frac        AS prev_frac,
-           prev.stop_sequence AS prev_seq
+           prev.stop_sequence AS prev_seq,
+           arr.arrived_ts
     FROM placed p
     JOIN trip_stop_offset cur
       ON cur.trip_id = p.trip_id AND cur.stop_sequence = p.seq
@@ -58,6 +59,20 @@ bracketed AS (
         ORDER BY o2.stop_sequence DESC
         LIMIT 1
     ) prev ON true
+    -- when the vehicle first reported itself stopped here. The MBTA schedules
+    -- arrival = departure at nearly every stop, so measuring a dwelling vehicle
+    -- against the clock reads one second later per second it sits; measure it
+    -- at the arrival event instead and hold that through the dwell
+    LEFT JOIN LATERAL (
+        SELECT min(vp2.ts) AS arrived_ts
+        FROM vehicle_position vp2
+        WHERE vp2.vehicle_id = p.vehicle_id
+          AND vp2.trip_id = p.trip_id
+          AND vp2.start_date = p.start_date
+          AND vp2.current_stop_sequence = p.seq
+          AND vp2.current_status = 'STOPPED_AT'
+          AND vp2.ts BETWEEN p.ts - interval '3 hours' AND p.ts
+    ) arr ON p.current_status = 'STOPPED_AT'
 ),
 positioned AS (
     SELECT b.*,
@@ -109,27 +124,38 @@ final AS (
            COALESCE(s.route_id, s.trip_route_id) AS route_id,
            s.direction_id, s.ts, s.frac, s.snap_error_m, s.method,
            gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text) AS scheduled_time,
-           -- layovers floor at zero: waiting for your departure isn't early
-           CASE WHEN s.method = 'layover' THEN GREATEST(0, round(extract(epoch FROM
-                    s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text))))
-                ELSE round(extract(epoch FROM
-                    s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))
+           CASE
+               -- waiting at the origin for your departure isn't early
+               WHEN s.method IN ('layover', 'first_stop')
+                   THEN GREATEST(0, round(extract(epoch FROM
+                        s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text))))
+               -- the deviation on arrival, held for the dwell
+               WHEN s.method = 'stopped_at'
+                   THEN round(extract(epoch FROM
+                        COALESCE(s.arrived_ts, s.ts)
+                        - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))
+               ELSE round(extract(epoch FROM
+                        s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))
            END::integer AS computed_delay_s,
            s.seq,
            s.raw_ratio
     FROM scheduled s
 ),
 with_feed AS (
-    SELECT f.*, tu.delay_s AS feed_delay_s
+    SELECT f.*, tu.feed_delay_s
     FROM final f
     -- nearest the observation, not newest: newest makes backfill compare an
-    -- early-trip position against a prediction from the end of that trip
+    -- early-trip position against a prediction from the end of that trip.
+    -- A layover is measured against its departure, so compare it with the
+    -- predicted departure; everything else is against an arrival
     LEFT JOIN LATERAL (
-        SELECT tu.delay_s
+        SELECT CASE WHEN f.method = 'layover'
+                    THEN COALESCE(tu.departure_delay_s, tu.delay_s)
+                    ELSE COALESCE(tu.delay_s, tu.departure_delay_s) END AS feed_delay_s
         FROM trip_update tu
         WHERE tu.trip_id = f.trip_id
           AND tu.stop_sequence = f.seq
-          AND tu.delay_s IS NOT NULL
+          AND COALESCE(tu.delay_s, tu.departure_delay_s) IS NOT NULL
           AND tu.ts BETWEEN f.ts - interval '5 minutes'
                         AND f.ts + interval '5 minutes'
         ORDER BY abs(extract(epoch FROM tu.ts - f.ts))

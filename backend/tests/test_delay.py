@@ -31,7 +31,7 @@ async def observe(conn, ts, lon, *, seq, status, lat=42.35, vehicle="v1", trip="
     ids = [r["id"] for r in await conn.fetch("SELECT id FROM vehicle_position")]
     await delay.compute(conn, ids)
     return await conn.fetchrow(
-        "SELECT * FROM delay_observation WHERE vehicle_id = $1", vehicle
+        "SELECT * FROM delay_observation WHERE vehicle_id = $1 AND ts = $2", vehicle, ts
     )
 
 
@@ -69,6 +69,40 @@ async def test_first_stop_measured_against_arrival(conn):
     assert row["method"] == "first_stop"
     assert row["computed_delay_s"] == 60
     assert row["confidence"] == "medium"
+
+
+async def test_first_stop_early_floors_at_zero(conn):
+    # approaching the origin ahead of schedule: same rule as a layover
+    row = await observe(conn, at(17700), -71.10, seq=1, status="IN_TRANSIT_TO")
+    assert row["method"] == "first_stop"
+    assert row["computed_delay_s"] == 0
+
+
+async def test_stopped_at_holds_the_arrival_deviation(conn):
+    # arrives 2 min early and sits: the figure stays at -120 rather than
+    # climbing a second per second through the dwell
+    first = await observe(conn, at(18180), -71.09, seq=2, status="STOPPED_AT")
+    assert first["computed_delay_s"] == -120
+    later = await observe(conn, at(18420), -71.09, seq=2, status="STOPPED_AT")
+    assert later["method"] == "stopped_at"
+    assert later["computed_delay_s"] == -120
+
+
+async def test_stopped_at_hold_is_per_service_date(conn):
+    # the same trip ran yesterday; that arrival must not anchor today's
+    yesterday = SERVICE_DATE - timedelta(days=1)
+    await conn.execute(
+        """
+        INSERT INTO vehicle_position
+            (vehicle_id, trip_id, route_id, direction_id, start_date, ts,
+             geom, geom_p, current_status, current_stop_sequence)
+        SELECT 'v1', 'T1', 'R1', 0, $1, $2, g, ST_Transform(g, 26986), 'STOPPED_AT', 2
+        FROM (SELECT ST_SetSRID(ST_MakePoint(-71.09, 42.35), 4326) AS g) p
+        """,
+        yesterday, at(18000, yesterday),
+    )
+    row = await observe(conn, at(18420), -71.09, seq=2, status="STOPPED_AT")
+    assert row["computed_delay_s"] == 120
 
 
 async def test_backwards_leg_is_not_scored(conn):
@@ -120,6 +154,21 @@ async def test_feed_join_takes_nearest_prediction(conn):
     row = await observe(conn, obs_ts, -71.095, seq=2, status="IN_TRANSIT_TO")
     assert row["feed_delay_s"] == 100
     assert row["divergence_s"] == row["computed_delay_s"] - 100
+
+
+async def test_layover_compares_against_predicted_departure(conn):
+    obs_ts = at(18120)
+    await conn.execute(
+        """
+        INSERT INTO trip_update (trip_id, stop_sequence, ts, delay_s, departure_delay_s)
+        VALUES ('T1', 1, $1, 30, 120)
+        """,
+        obs_ts,
+    )
+    row = await observe(conn, obs_ts, -71.10, seq=1, status="STOPPED_AT")
+    assert row["method"] == "layover"
+    assert row["feed_delay_s"] == 120
+    assert row["divergence_s"] == 0
 
 
 async def test_feed_join_ignores_distant_predictions(conn):
