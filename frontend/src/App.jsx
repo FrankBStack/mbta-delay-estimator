@@ -26,7 +26,11 @@ export default function App() {
   const [delayRoutes, setDelayRoutes] = useState([]);
   const [divergence, setDivergence] = useState(null);
   const [routeShape, setRouteShape] = useState(null);
+  const [hoverShape, setHoverShape] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
+  const [hoveredVehicleId, setHoveredVehicleId] = useState(null);
+  // phones only: the sidebar is a bottom sheet
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [routeType, setRouteType] = useState(null);
   const [windowMinutes, setWindowMinutes] = useState(60);
   const [error, setError] = useState(null);
@@ -104,25 +108,24 @@ export default function App() {
     [vehicles, selectedVehicleId]
   );
 
-  // Draw the route line for whichever vehicle is selected.
-  useEffect(() => {
-    const routeId = selected?.properties?.route_id;
-    if (!routeId) {
-      setRouteShape(null);
-      return;
-    }
-    let alive = true;
-    api
-      .routeShape(routeId)
-      // shuttle routes have no fixed alignment to draw
-      .then((s) => alive && setRouteShape(s?.geometry ? s : null))
-      .catch(() => alive && setRouteShape(null));
-    return () => {
-      alive = false;
-    };
-  }, [selected?.properties?.route_id]);
+  const hoveredRouteId = useMemo(
+    () =>
+      vehicles?.features.find((f) => f.properties.vehicle_id === hoveredVehicleId)
+        ?.properties.route_id ?? null,
+    [vehicles, hoveredVehicleId]
+  );
+  const selectedRouteId = selected?.properties?.route_id ?? null;
 
-  const handleSelect = useCallback((id) => setSelectedVehicleId(id), []);
+  // Draw the route line for the selected vehicle, and a fainter one for
+  // whichever is under the cursor.
+  useRouteShape(selectedRouteId, setRouteShape);
+  useRouteShape(hoveredRouteId === selectedRouteId ? null : hoveredRouteId, setHoverShape);
+
+  const handleSelect = useCallback((id) => {
+    setSelectedVehicleId(id);
+    if (id) setSheetOpen(true);
+  }, []);
+  const handleHover = useCallback((id) => setHoveredVehicleId(id), []);
 
   const feedAge = secondsAgo(health?.poller?.feed_timestamp);
   const stale = feedAge !== null && feedAge > 90;
@@ -180,8 +183,10 @@ export default function App() {
         <MapView
           vehicles={vehicles}
           routeShape={routeShape}
+          hoverShape={hoverShape}
           selectedVehicleId={selectedVehicleId}
           onSelectVehicle={handleSelect}
+          onHoverVehicle={handleHover}
         />
 
         <div className="legend-overlay">
@@ -201,7 +206,16 @@ export default function App() {
           </span>
         </div>
 
-        <aside className="sidebar">
+        <aside className="sidebar" data-open={sheetOpen}>
+          <button
+            className="sheet-handle"
+            aria-label={sheetOpen ? "Collapse panel" : "Expand panel"}
+            aria-expanded={sheetOpen}
+            onClick={() => setSheetOpen((o) => !o)}
+          >
+            <span />
+          </button>
+
           <Headline
             vehicles={vehicles}
             divergence={divergence}
@@ -237,4 +251,22 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function useRouteShape(routeId, setShape) {
+  useEffect(() => {
+    if (!routeId) {
+      setShape(null);
+      return;
+    }
+    let alive = true;
+    api
+      .routeShape(routeId)
+      // shuttle routes have no fixed alignment to draw
+      .then((s) => alive && setShape(s?.geometry ? s : null))
+      .catch(() => alive && setShape(null));
+    return () => {
+      alive = false;
+    };
+  }, [routeId, setShape]);
 }

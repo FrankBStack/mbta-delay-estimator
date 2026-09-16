@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import { formatDelay } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -12,12 +13,15 @@ const TWEEN_MS = 900;
 export default function MapView({
   vehicles,
   routeShape,
+  hoverShape,
   selectedVehicleId,
   onSelectVehicle,
+  onHoverVehicle,
 }) {
   const container = useRef(null);
   const map = useRef(null);
   const ready = useRef(false);
+  const popup = useRef(null);
   const tracks = useRef(new Map()); // vehicle_id -> {from, to, start, props}
   const frame = useRef(null);
 
@@ -34,6 +38,23 @@ export default function MapView({
 
     m.on("load", () => {
       addMarkerImages(m);
+
+      // hovered route sits under the selected one
+      m.addSource("route-hover", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      m.addLayer({
+        id: "route-hover-line",
+        type: "line",
+        source: "route-hover",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], "#3987e5"],
+          "line-width": 2,
+          "line-opacity": 0.45,
+        },
+      });
 
       m.addSource("route-shape", {
         type: "geojson",
@@ -98,6 +119,14 @@ export default function MapView({
         },
       });
 
+      popup.current = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 12,
+        maxWidth: "240px",
+        className: "vehicle-popup",
+      });
+
       m.on("click", "vehicles-icon", (e) => {
         const f = e.features?.[0];
         if (f) onSelectVehicle?.(f.properties.vehicle_id);
@@ -105,8 +134,19 @@ export default function MapView({
       m.on("mouseenter", "vehicles-icon", () => {
         m.getCanvas().style.cursor = "pointer";
       });
+      m.on("mousemove", "vehicles-icon", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        popup.current
+          .setLngLat(f.geometry.coordinates)
+          .setDOMContent(tooltip(f.properties))
+          .addTo(m);
+        onHoverVehicle?.(f.properties.vehicle_id);
+      });
       m.on("mouseleave", "vehicles-icon", () => {
         m.getCanvas().style.cursor = "";
+        popup.current.remove();
+        onHoverVehicle?.(null);
       });
       m.on("click", (e) => {
         const hits = m.queryRenderedFeatures(e.point, { layers: ["vehicles-icon"] });
@@ -118,11 +158,12 @@ export default function MapView({
 
     return () => {
       if (frame.current) cancelAnimationFrame(frame.current);
+      popup.current?.remove();
       m.remove();
       map.current = null;
       ready.current = false;
     };
-  }, [onSelectVehicle]);
+  }, [onSelectVehicle, onHoverVehicle]);
 
   useEffect(() => {
     if (!map.current || !vehicles) return;
@@ -190,18 +231,40 @@ export default function MapView({
     }
   }, [selectedVehicleId, vehicles]);
 
+  useSourceData(map, ready, "route-shape", routeShape);
+  useSourceData(map, ready, "route-hover", hoverShape);
+
+  return <div ref={container} className="map" />;
+}
+
+const EMPTY = { type: "FeatureCollection", features: [] };
+
+function useSourceData(map, ready, sourceId, data) {
   useEffect(() => {
     if (!map.current) return;
     const apply = () => {
-      const src = map.current?.getSource("route-shape");
-      if (!src) return;
-      src.setData(routeShape ?? { type: "FeatureCollection", features: [] });
+      map.current?.getSource(sourceId)?.setData(data ?? EMPTY);
     };
     if (ready.current) apply();
     else map.current.once("load", apply);
-  }, [routeShape]);
+  }, [map, ready, sourceId, data]);
+}
 
-  return <div ref={container} className="map" />;
+// DOM, not an HTML string: route names and headsigns come from the feed
+function tooltip(p) {
+  const el = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${p.route_name ?? "—"} · ${p.label ?? p.vehicle_id}`;
+  const headsign = document.createElement("div");
+  headsign.className = "muted";
+  headsign.textContent = p.headsign ?? "Unknown destination";
+  const delay = document.createElement("div");
+  delay.textContent =
+    p.computed_delay_s === null || p.computed_delay_s === undefined
+      ? "Not placeable"
+      : formatDelay(p.computed_delay_s);
+  el.append(title, headsign, delay);
+  return el;
 }
 
 function currentPoint(track, now) {
