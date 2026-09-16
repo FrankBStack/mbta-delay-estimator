@@ -14,6 +14,12 @@ python -m app.backfill                              # rescore stored positions a
 ```
 
 `RUN_POLLER` defaults to true so a single local process still works unchanged.
+
+A backfill deletes and rescores every observation in its window, and pairs
+each one with the feed again from `trip_update`. Predictions are only kept
+for `BACKFILL_HOURS`, so a backfill reaching past that, or past any manual
+cleanup of `trip_update`, leaves those observations with a computed delay but
+no feed comparison. Measure before you backfill if the comparison matters.
 The poller records its state to `feed_meta` each cycle, so `/api/analytics/health`
 reports the real poller regardless of which process it runs in.
 
