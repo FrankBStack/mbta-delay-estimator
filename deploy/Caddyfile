@@ -1,4 +1,9 @@
 {$DOMAIN} {
     encode gzip
-    reverse_proxy web:80
+    # retry the upstream dial while the web container is being recreated,
+    # instead of answering 502 for the few seconds it is down
+    reverse_proxy web:80 {
+        lb_try_duration 15s
+        lb_try_interval 250ms
+    }
 }

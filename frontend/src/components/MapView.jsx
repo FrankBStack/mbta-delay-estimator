@@ -17,6 +17,7 @@ export default function MapView({
   selectedVehicleId,
   onSelectVehicle,
   onHoverVehicle,
+  stale = false,
 }) {
   const container = useRef(null);
   const map = useRef(null);
@@ -234,7 +235,7 @@ export default function MapView({
   useSourceData(map, ready, "route-shape", routeShape);
   useSourceData(map, ready, "route-hover", hoverShape);
 
-  return <div ref={container} className="map" />;
+  return <div ref={container} className="map" data-stale={stale} />;
 }
 
 const EMPTY = { type: "FeatureCollection", features: [] };

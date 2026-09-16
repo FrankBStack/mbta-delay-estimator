@@ -6,9 +6,16 @@ import Headline from "./components/Headline.jsx";
 import VehicleCard from "./components/VehicleCard.jsx";
 import { api } from "./lib/api.js";
 import { DELAY_BUCKETS, formatClock, secondsAgo } from "./lib/delay.js";
+import {
+  POLL_STEPS_MS,
+  STALE_AFTER_S,
+  describeStatus,
+  keepLastGood,
+  nextDelay,
+} from "./lib/status.js";
 
-const VEHICLE_POLL_MS = 5000;
 const ANALYTICS_POLL_MS = 30000;
+const DEV_HOST = /^(localhost|127\.0\.0\.1)$/;
 
 const MODES = [
   { value: null, label: "All" },
@@ -40,26 +47,32 @@ export default function App() {
   const filters = useRef({ routeType, windowMinutes });
   filters.current = { routeType, windowMinutes };
 
-  // live poll
+  // live poll, backing off while it fails
   useEffect(() => {
     let alive = true;
     let timer;
+    let delay = POLL_STEPS_MS[0];
     const tick = async () => {
+      let ok = false;
       try {
         const [v, h] = await Promise.all([
           api.vehicles({ route_type: filters.current.routeType }),
           api.health(),
         ]);
         if (!alive) return;
-        setVehicles(v);
+        const age = secondsAgo(h?.poller?.feed_timestamp);
+        const feedStale = age !== null && age > STALE_AFTER_S;
+        setVehicles((prev) => keepLastGood(prev, v, feedStale));
         setHealth(h);
         setError(null);
+        ok = true;
       } catch (e) {
         if (alive) setError(e.message);
       } finally {
         if (alive) {
           setLoading(false);
-          timer = setTimeout(tick, VEHICLE_POLL_MS);
+          delay = nextDelay(delay, ok);
+          timer = setTimeout(tick, delay);
         }
       }
     };
@@ -128,7 +141,12 @@ export default function App() {
   const handleHover = useCallback((id) => setHoveredVehicleId(id), []);
 
   const feedAge = secondsAgo(health?.poller?.feed_timestamp);
-  const stale = feedAge !== null && feedAge > 90;
+  const status = describeStatus({ error, health, feedAgeS: feedAge });
+  const stale = status.level !== "ok";
+  const devHint =
+    status.level === "down" && DEV_HOST.test(window.location.hostname)
+      ? " Is uvicorn running on :8010?"
+      : "";
 
   return (
     <div className="app">
@@ -173,15 +191,22 @@ export default function App() {
         </div>
       </header>
 
-      {error && (
-        <div className="banner">
-          Backend unreachable — {error}. Is uvicorn running on :8010?
+      {status.headline && (
+        <div className="banner" data-level={status.level} role="status">
+          <span>{status.headline}{devHint}</span>
+          {status.detail && (
+            <details>
+              <summary>Details</summary>
+              <code>{status.detail}</code>
+            </details>
+          )}
         </div>
       )}
 
       <main>
         <MapView
           vehicles={vehicles}
+          stale={stale}
           routeShape={routeShape}
           hoverShape={hoverShape}
           selectedVehicleId={selectedVehicleId}

@@ -9,6 +9,7 @@ aggregate. They read as exactly zero, which says nothing about lateness and
 drags a fleet median toward "on time".
 """
 
+import shutil
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -274,7 +275,12 @@ async def _health():
     async with db.pool().acquire() as conn:
         poller = await realtime.read_heartbeat(conn)
 
+    # the containers share the host's root volume, so this is the disk
+    # Postgres is writing to; the page warns when it runs low
+    disk = shutil.disk_usage("/")
+
     return {
         "poller": poller or realtime.snapshot(),
         "data": dict(counts) if counts else {},
+        "disk": {"free_bytes": disk.free, "total_bytes": disk.total},
     }
