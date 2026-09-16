@@ -39,10 +39,13 @@ recorded arrival. Measured on identical observations, the hold cut the
 `stopped_at` class's mean absolute divergence from 30s to 11s at peak
 ([docs/validation.md](validation.md)).
 
-The hold has one known failure: a vehicle that arrives a few minutes late and
-then sits for half an hour reads as a few minutes late for the whole time,
-while the feed's prediction keeps growing. A cap on how long the hold applies
-past scheduled departure would fix it and is not yet implemented.
+The hold is capped at five minutes (`HOLD_CAP_S`). A vehicle that has sat
+longer than that is stuck, not dwelling: the schedule expected it to have
+left, and it is scored against the clock again. Without the cap, a train that
+arrived five minutes late and then sat for an hour and a half read as five
+minutes late throughout while the feed had it at an hour and forty. With it,
+the count of ten-minute-plus disagreements at peak fell from 72 to 57, below
+the 60 that clock scoring produces, and every gain of the hold stayed.
 
 ## Idle layovers
 

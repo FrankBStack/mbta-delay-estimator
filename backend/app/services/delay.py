@@ -19,6 +19,11 @@ from ..config import AGENCY_TZ, BACKFILL_HOURS, MAX_SNAP_ERROR_M
 # rather than a late vehicle. Retained, but flagged low for the analytics.
 IMPLAUSIBLE_DELAY_S = 3 * 3600
 
+# A stopped vehicle is scored at the moment it arrived and held there through
+# the dwell. Past this long it is stuck, not dwelling: the schedule expected it
+# to have left, riders are waiting, and the clock is the right measure again.
+HOLD_CAP_S = 300
+
 
 COMPUTE_SQL = f"""
 WITH obs AS (
@@ -132,10 +137,13 @@ final AS (
                WHEN s.method IN ('layover', 'first_stop')
                    THEN GREATEST(0, round(extract(epoch FROM
                         s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text))))
-               -- the deviation on arrival, held for the dwell
+               -- the deviation on arrival, held for the dwell, until the
+               -- dwell has gone on long enough to be a breakdown
                WHEN s.method = 'stopped_at'
                    THEN round(extract(epoch FROM
-                        COALESCE(s.arrived_ts, s.ts)
+                        CASE WHEN s.arrived_ts IS NULL
+                               OR s.ts - s.arrived_ts > interval '{HOLD_CAP_S} seconds'
+                             THEN s.ts ELSE s.arrived_ts END
                         - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))
                ELSE round(extract(epoch FROM
                         s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))

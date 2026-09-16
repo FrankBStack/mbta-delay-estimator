@@ -83,13 +83,13 @@ per minute:
 | Within 60s of feed | 90.0% | 93.0% |
 | Within 120s of feed | 96.6% | 98.1% |
 
-The comparison has caught two estimator bugs so far. Scoring the same
-observations with and without the most recent fix, the dwell hold, moved the
-share within 60s at peak from 85.0% to 90.0% and cut the stopped-at class's
-mean absolute divergence from 30s to 11s. It also exposed a case the hold gets
-wrong, listed under limitations. [docs/validation.md](docs/validation.md) has
-the before-and-after tables, the breakdown by service level and placement
-method, and the earlier first-stop bug.
+The comparison has caught three estimator bugs so far. Scoring the same
+observations before and after the two most recent fixes, the dwell hold and
+its cap, moved the share within 60s at peak from 85.0% to 90.0%, cut the
+stopped-at class's mean absolute divergence from 30s to 10s, and brought the
+spread from σ 67s to 63s. [docs/validation.md](docs/validation.md) has the
+before-and-after tables, the cap values tried, the breakdown by service level
+and placement method, and the earlier first-stop bug.
 
 ## API
 
@@ -204,9 +204,5 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 - The feed comparison is null when no prediction falls within five minutes of an
   observation, rather than reaching for a more distant one. Those rows still
   carry a computed delay, just nothing to compare it against.
-- A stopped vehicle's delay is held at what it was on arrival. That is right
-  for a normal dwell and wrong for a vehicle stuck at a stop for half an hour,
-  which keeps reading as a few minutes late while the feed's prediction grows.
-  A cap on the hold is the planned fix.
 - The projection is specific to Massachusetts. Targeting another city means
   changing the SRID, not only the feed URLs.

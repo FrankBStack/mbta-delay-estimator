@@ -88,6 +88,17 @@ async def test_stopped_at_holds_the_arrival_deviation(conn):
     assert later["computed_delay_s"] == -120
 
 
+async def test_stopped_at_hold_gives_way_to_the_clock_when_stuck(conn):
+    # arrived 2 min early, then sat for 400s: past the 300s cap that is a
+    # stuck vehicle, so it reads 280s late by the clock, not -120 held
+    await observe(conn, at(18180), -71.09, seq=2, status="STOPPED_AT")
+    within = await observe(conn, at(18180 + 299), -71.09, seq=2, status="STOPPED_AT")
+    assert within["computed_delay_s"] == -120
+    stuck = await observe(conn, at(18180 + 400), -71.09, seq=2, status="STOPPED_AT")
+    assert stuck["method"] == "stopped_at"
+    assert stuck["computed_delay_s"] == 280
+
+
 async def test_stopped_at_hold_is_per_service_date(conn):
     # the same trip ran yesterday; that arrival must not anchor today's
     yesterday = SERVICE_DATE - timedelta(days=1)
