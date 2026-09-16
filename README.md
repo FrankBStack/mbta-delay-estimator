@@ -4,13 +4,9 @@
 
 Real-time map of Boston transit vehicles. Delays are computed from each
 vehicle's physical position against the published timetable, not read from the
-agency feed.
-
-Over a weekday evening peak the computed figure lands within a minute of the
-MBTA's own prediction 88.8% of the time (σ 50s); see [Validation](#validation)
-below. Those figures predate the dwell hold described under
-[Placing a vehicle on its route](#placing-a-vehicle-on-its-route) and will be
-re-measured.
+agency feed. Over a weekday evening peak the computed figure lands within a
+minute of the MBTA's own prediction 88.8% of the time (σ 50s); see
+[Validation](#validation).
 
 ![Live map of Boston with vehicles colored by delay, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/screenshot.png)
 
@@ -42,21 +38,15 @@ The work is keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence).
 2.2M to roughly 24,000.
 
 All distance computation runs in EPSG:26986 (NAD83 / Massachusetts Mainland, in
-metres) rather than WGS84 degrees. At Boston's latitude a degree of longitude is
-approximately 0.74 of a degree of latitude, so locating a point on a line in
-unprojected coordinates biases the result east-west.
+metres) rather than WGS84 degrees, which would bias placement east-west at
+Boston's latitude.
 
 ### Placing a vehicle on its route
 
 `ST_LineLocatePoint` returns the first nearest point on the line, so on a loop
-route a vehicle on its second pass resolves to a position near the start. This
-affects 2.6% of MBTA trips, flagged at load time as `frac_monotonic = false`.
-The feed's `current_stop_sequence` picks which leg the vehicle is on. Where that
-leg's stop fractions run backwards, an in-transit vehicle can't be placed along
-it and the observation is dropped rather than scored against the wrong stop;
-stopped-at and layover observations don't depend on the fraction and are kept.
-
-Each observation records which method produced it:
+route a vehicle on its second pass resolves to a position near the start. The
+feed's `current_stop_sequence` picks which leg the vehicle is on, and the
+fraction locates it along that leg. Each observation records how it was placed:
 
 | Method | Description |
 |---|---|
@@ -65,43 +55,21 @@ Each observation records which method produced it:
 | `layover` | Stopped at the trip's first stop; measured against scheduled departure, floored at zero |
 | `first_stop` | Approaching the first stop, with no preceding stop to interpolate from; floored at zero |
 
-The MBTA schedules arrival equal to departure at all but 92 of its 2.2M stop
-times, so boarding time is folded into the travel segments. Measured against
-the clock, a vehicle sitting at a stop would read one second later for every
-second it dwells, then appear to catch up along the next leg. `stopped_at`
-therefore measures the deviation once, when the vehicle first reports itself
-stopped, and holds it until it moves. The catch-up along the leg remains, and
-is real: the timetable does expect the vehicle to have left.
-
-A vehicle waiting at its origin ahead of departure reads as exactly zero. That
-says nothing about lateness, so the headline median and the analytics leave
-those out and the headline counts them separately.
-
-Observations are marked low confidence where the vehicle sits more than 150m
-from the shape it reports running, or where the result exceeds three hours —
-typically indicating a mismatched service date. These are retained but excluded
-from analytics by default.
-
-Stop-to-shape snap error across the loaded feed: mean 7.0m, p95 11.9m.
+A vehicle sitting at a stop is measured once, when it first reports itself
+stopped, rather than reading one second later for every second it dwells.
+Observations far from their shape or implausibly late are kept but flagged low
+confidence and left out of the analytics. [docs/design.md](docs/design.md) has
+the full placement and confidence rules.
 
 ## Validation
 
 Since the MBTA publishes no delay field, its figure is derived for comparison
 from the same trip and stop: predicted arrival against scheduled arrival, or
-predicted departure against scheduled departure for a vehicle on layover, which
-is measured against its departure. Over a weekday evening peak (87,461 paired
-observations) the two agreed to within 60s 88.8% of the time, with σ 50s and a
-mean divergence of +19s. Most of that offset came from comparing a dwelling
-vehicle's clock reading against the feed's recorded arrival; the dwell hold
-above removes it. They answer different questions (ours is how late a vehicle
-is right now, theirs is how late it will be on arrival), so they diverge most
-at peak service.
-
-Correlation is reported but is a weak test here. Both figures share the same
-schedule baseline and vehicle position, and delays span several minutes, so an
-r above 0.99 is nearly guaranteed. The divergence statistics are thinned to one
-observation per vehicle per minute; consecutive 15s reports from one vehicle
-are near-duplicates.
+predicted departure against scheduled departure for a vehicle on layover. Over
+a weekday evening peak (87,461 paired observations) the two agreed to within
+60s 88.8% of the time, with σ 50s. They answer different questions (ours is how
+late a vehicle is right now, theirs is how late it will be on arrival), so they
+diverge most at peak service.
 
 [docs/validation.md](docs/validation.md) has the full breakdown: agreement by
 service level and placement method, per-route examples, and a bug in
@@ -148,11 +116,8 @@ docker compose up -d --build           # PostGIS, API, poller, and the frontend 
 docker compose run --rm load           # downloads and loads the feed, ~60s; repeat weekly
 ```
 
-The schema is applied when the database volume is first created, so the API
-and poller start before the feed has been loaded; vehicles simply carry no
-delay until `load` finishes. nginx serves the built frontend and proxies
-`/api` to the API container on the same origin, so no CORS configuration is
-needed.
+The API and poller start before the feed has been loaded; vehicles carry no
+delay until `load` finishes.
 
 ## Running locally
 
@@ -187,29 +152,14 @@ cd frontend
 npm test                          # delay scale, formatting, chart helpers
 ```
 
-CI runs both suites and builds the Docker images on every push. Point the
-backend tests at another database with `TEST_ADMIN_URL` and `TEST_DATABASE_URL`.
+CI runs both suites and builds the Docker images on every push.
 
 ## Deployment
 
-The poller writes and the API only reads. In production they run as separate
-processes; otherwise every API replica would poll the same feeds and write the
-same rows.
-
-```bash
-RUN_POLLER=false uvicorn app.main:app --port 8010   # API, any number of these
-python -m app.poller                                # exactly one of these
-python -m app.gtfs_static                           # weekly, when the MBTA publishes a new feed
-python -m app.backfill                              # rescore stored positions after an estimator change
-```
-
-`RUN_POLLER` defaults to true so a single local process still works unchanged.
-The poller records its state to `feed_meta` each cycle, so `/api/analytics/health`
-reports the real poller regardless of which process it runs in.
-
-The feed reload drops and rebuilds the static tables, leaving observations
-alone, and is a brief outage: vehicles render without delays until the offsets
-finish. If that window matters, build into a new schema and swap.
+The poller writes and the API only reads, so in production they run as
+separate processes: any number of API replicas with `RUN_POLLER=false`, and
+exactly one poller. [docs/operations.md](docs/operations.md) covers the
+commands, the weekly feed reload, and backfilling after an estimator change.
 
 ## Known limitations
 
@@ -221,15 +171,8 @@ finish. If that window matters, build into a new schema and swap.
   vehicles overnight against 765 at morning peak), and agreement with the feed
   is measurably weaker at peak. Any single-window figure should be read against
   the service level it was sampled from.
-- Distance work is done in EPSG:26986, which is specific to Massachusetts.
-- Trip ids change with every MBTA rating, so a stale static feed shows up as
-  vehicles quietly losing their delay. The poller warns when the loaded feed's
-  `feed_end_date` has passed or fewer than half of the scheduled trips it sees
-  match, and `/api/analytics/health` reports both.
-  Targeting another city means changing the SRID in `schema.sql` and
-  `config.py`, not only the feed URLs.
 - The feed comparison is null when no prediction falls within five minutes of an
   observation, rather than reaching for a more distant one. Those rows still
   carry a computed delay, just nothing to compare it against.
-- Read endpoints are cached for `CACHE_TTL_S`, so a response can trail the
-  poller by a few seconds on top of the feed's own age.
+- The projection is specific to Massachusetts. Targeting another city means
+  changing the SRID, not only the feed URLs.
