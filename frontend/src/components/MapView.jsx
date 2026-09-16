@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { delayColorExpression } from "../lib/delay.js";
+import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 const BOSTON = { center: [-71.0789, 42.3465], zoom: 11.4 };
@@ -33,6 +33,8 @@ export default function MapView({
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     m.on("load", () => {
+      addMarkerImages(m);
+
       m.addSource("route-shape", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -55,22 +57,28 @@ export default function MapView({
       });
 
       m.addLayer({
-        id: "vehicles-circle",
-        type: "circle",
+        id: "vehicles-icon",
+        type: "symbol",
         source: "vehicles",
-        paint: {
-          "circle-color": delayColorExpression(),
-          "circle-radius": [
+        layout: {
+          "icon-image": markerImageExpression(),
+          "icon-rotate": ["get", "bearing"],
+          "icon-rotation-alignment": "map",
+          // every vehicle renders, even where they pile up downtown
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          // the image body is 9px at size 1; trains a third larger. Zoom has
+          // to be the outer expression, so the mode factor sits in each stop.
+          "icon-size": [
             "interpolate", ["linear"], ["zoom"],
-            9, 3.5,
-            12, 5.5,
-            15, 8,
+            9, ["case", ["get", "is_rail"], 0.54, 0.4],
+            12, ["case", ["get", "is_rail"], 0.84, 0.62],
+            15, ["case", ["get", "is_rail"], 1.2, 0.9],
           ],
-          // dark ring separates vehicles where they cluster downtown; muted
-          // ring and washed fill mark the ones that could not be placed
-          "circle-stroke-width": 2,
-          "circle-stroke-color": ["case", ["get", "has_delay"], "#12121a", "#6a6a68"],
-          "circle-opacity": ["case", ["get", "has_delay"], 0.95, 0.4],
+          "symbol-sort-key": ["case", ["get", "is_rail"], 2, 1],
+        },
+        paint: {
+          "icon-opacity": ["case", ["get", "has_delay"], 0.95, 0.45],
         },
       });
 
@@ -90,18 +98,18 @@ export default function MapView({
         },
       });
 
-      m.on("click", "vehicles-circle", (e) => {
+      m.on("click", "vehicles-icon", (e) => {
         const f = e.features?.[0];
         if (f) onSelectVehicle?.(f.properties.vehicle_id);
       });
-      m.on("mouseenter", "vehicles-circle", () => {
+      m.on("mouseenter", "vehicles-icon", () => {
         m.getCanvas().style.cursor = "pointer";
       });
-      m.on("mouseleave", "vehicles-circle", () => {
+      m.on("mouseleave", "vehicles-icon", () => {
         m.getCanvas().style.cursor = "";
       });
       m.on("click", (e) => {
-        const hits = m.queryRenderedFeatures(e.point, { layers: ["vehicles-circle"] });
+        const hits = m.queryRenderedFeatures(e.point, { layers: ["vehicles-icon"] });
         if (!hits.length) onSelectVehicle?.(null);
       });
 
@@ -144,7 +152,7 @@ export default function MapView({
       let animating = false;
       for (const [id, track] of tracks.current) {
         if ((t - track.start) / TWEEN_MS < 1) animating = true;
-        const d = track.props.computed_delay_s;
+        const { computed_delay_s: d, bearing, route_type } = track.props;
         features.push({
           type: "Feature",
           geometry: { type: "Point", coordinates: currentPoint(track, t) },
@@ -152,6 +160,9 @@ export default function MapView({
             ...track.props,
             vehicle_id: id,
             has_delay: d !== null && d !== undefined,
+            has_bearing: bearing !== null && bearing !== undefined,
+            bearing: bearing ?? 0,
+            is_rail: route_type === 0 || route_type === 1 || route_type === 2,
           },
         });
       }

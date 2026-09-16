@@ -262,6 +262,33 @@ main {
   color: var(--text-secondary);
   margin-bottom: 2px;
 }
+.legend-note {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  max-width: 190px;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+/* headline */
+.hero {
+  padding: 4px 2px 2px;
+}
+.hero-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hero-value {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  margin: 3px 0 6px;
+}
 
 /* tiles */
 .tiles {

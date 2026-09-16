@@ -29,6 +29,20 @@ export function delayColorExpression(property = "computed_delay_s") {
   return ["case", ["get", "has_delay"], step, UNKNOWN_COLOR];
 }
 
+export function delayBucket(seconds) {
+  if (seconds === null || seconds === undefined) return "unknown";
+  return DELAY_BUCKETS.find((b) => seconds < b.max)?.key ?? "very_late";
+}
+
+// Bucket key rather than color, for picking a marker image by name.
+export function delayBucketExpression(property = "computed_delay_s") {
+  const step = ["step", ["coalesce", ["get", property], 0], DELAY_BUCKETS[0].key];
+  for (let i = 0; i < DELAY_BUCKETS.length - 1; i++) {
+    step.push(DELAY_BUCKETS[i].max, DELAY_BUCKETS[i + 1].key);
+  }
+  return ["case", ["get", "has_delay"], step, "unknown"];
+}
+
 export function formatDelay(seconds, { sign = true } = {}) {
   if (seconds === null || seconds === undefined) return "—";
   const abs = Math.abs(seconds);

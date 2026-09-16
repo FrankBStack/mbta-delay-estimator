@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView from "./components/MapView.jsx";
 import DelayByRouteChart from "./components/DelayByRouteChart.jsx";
 import DivergencePanel from "./components/DivergencePanel.jsx";
+import Headline from "./components/Headline.jsx";
 import VehicleCard from "./components/VehicleCard.jsx";
 import { api } from "./lib/api.js";
 import { DELAY_BUCKETS, formatClock, secondsAgo } from "./lib/delay.js";
@@ -195,9 +196,18 @@ export default function App() {
             <span className="chip chip-hollow" />
             Not placeable
           </span>
+          <span className="legend-note">
+            Nose points the direction of travel. Trains are drawn larger.
+          </span>
         </div>
 
         <aside className="sidebar">
+          <Headline
+            vehicles={vehicles}
+            divergence={divergence}
+            windowMinutes={windowMinutes}
+          />
+
           {selected && (
             <VehicleCard
               vehicle={selected}

@@ -3,6 +3,8 @@ import {
   DELAY_BUCKETS,
   METHOD_LABELS,
   UNKNOWN_COLOR,
+  delayBucket,
+  delayBucketExpression,
   delayColor,
   delayColorExpression,
   formatDelay,
@@ -51,15 +53,31 @@ describe("delayColorExpression", () => {
   });
 });
 
+const probes = [-6000, -181, -180, -179, -46, -45, -44, 0, 89, 90, 91, 299, 300, 301, 9000];
+
 // The comment in delay.js claims the map and the legend "can't drift apart".
 // Nothing enforced that before this test.
 describe("map expression agrees with delayColor", () => {
   const step = delayColorExpression()[2];
-  const probes = [-6000, -181, -180, -179, -46, -45, -44, 0, 89, 90, 91, 299, 300, 301, 9000];
 
   for (const seconds of probes) {
     it(`classifies ${seconds}s the same way`, () => {
       expect(evalStep(step, seconds)).toBe(delayColor(seconds));
+    });
+  }
+});
+
+describe("delayBucketExpression", () => {
+  const expr = delayBucketExpression();
+
+  it("falls back to unknown without a delay", () => {
+    expect(expr[3]).toBe("unknown");
+    expect(delayBucket(null)).toBe("unknown");
+  });
+
+  for (const seconds of probes) {
+    it(`buckets ${seconds}s the same way as delayBucket`, () => {
+      expect(evalStep(expr[2], seconds)).toBe(delayBucket(seconds));
     });
   }
 });
