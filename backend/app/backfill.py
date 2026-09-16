@@ -17,7 +17,7 @@ from .config import BACKFILL_HOURS
 from .services import delay
 
 
-async def run(hours):
+async def run(hours: int) -> None:
     pool = await db.connect()
     try:
         async with pool.acquire() as conn:
@@ -29,7 +29,7 @@ async def run(hours):
         await db.close()
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Recompute recent delay observations")
     ap.add_argument("--hours", type=int, default=BACKFILL_HOURS)
     asyncio.run(run(ap.parse_args().hours))

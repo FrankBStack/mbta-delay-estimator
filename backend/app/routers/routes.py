@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -17,7 +17,7 @@ ROUTE_TYPE_NAMES = {
 
 
 @router.get("/routes")
-async def list_routes(active_only: bool = Query(False)):
+async def list_routes(active_only: bool = Query(False)) -> list[dict[str, Any]]:
     rows = await db.pool().fetch(
         """
         SELECT r.route_id, r.route_short_name, r.route_long_name, r.route_type,
@@ -49,7 +49,9 @@ async def list_routes(active_only: bool = Query(False)):
 
 
 @router.get("/routes/{route_id}/shape")
-async def route_shape(route_id: str, simplify_m: Optional[float] = Query(5.0, ge=0, le=100)):
+async def route_shape(
+    route_id: str, simplify_m: float | None = Query(5.0, ge=0, le=100)
+) -> dict[str, Any]:
     """Route geometry as GeoJSON.
 
     A route has one shape per pattern and direction and most of them overlap,

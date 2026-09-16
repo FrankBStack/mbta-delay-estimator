@@ -9,9 +9,11 @@ import asyncio
 import datetime as dt
 import json
 import logging
-
-import httpx
+from typing import Any
 from zoneinfo import ZoneInfo
+
+import asyncpg
+import httpx
 from google.transit import gtfs_realtime_pb2 as gtfs_rt
 
 from .. import db
@@ -30,7 +32,7 @@ log = logging.getLogger("tracker.realtime")
 
 _STATUS = {0: "INCOMING_AT", 1: "STOPPED_AT", 2: "IN_TRANSIT_TO"}
 
-STATE = {
+STATE: dict[str, Any] = {
     "last_poll": None,
     "last_error": None,
     "feed_timestamp": None,
@@ -56,7 +58,7 @@ RETENTION = {
 }
 
 
-def _date(value):
+def _date(value: str) -> dt.date | None:
     if not value or len(value) != 8:
         return None
     try:
@@ -65,11 +67,11 @@ def _date(value):
         return None
 
 
-def _utc(epoch):
-    return dt.datetime.fromtimestamp(epoch, tz=dt.timezone.utc)
+def _utc(epoch: int | float) -> dt.datetime:
+    return dt.datetime.fromtimestamp(epoch, tz=dt.UTC)
 
 
-async def fetch(client, url):
+async def fetch(client: httpx.AsyncClient, url: str) -> gtfs_rt.FeedMessage:
     resp = await client.get(url)
     resp.raise_for_status()
     msg = gtfs_rt.FeedMessage()
@@ -77,14 +79,14 @@ async def fetch(client, url):
     return msg
 
 
-async def ingest_vehicles(conn, msg):
+async def ingest_vehicles(conn: asyncpg.Connection, msg: gtfs_rt.FeedMessage) -> list[int]:
     """Insert positions, return ids of the rows that were actually new.
 
     The feed keeps republishing a vehicle at its old timestamp when it has
     nothing fresher, so the unique constraint dedupes and we skip recomputing
     delays for vehicles that haven't moved.
     """
-    cols = [[] for _ in range(14)]
+    cols: list[list[Any]] = [[] for _ in range(14)]
     for entity in msg.entity:
         if not entity.HasField("vehicle"):
             continue
@@ -142,7 +144,7 @@ async def ingest_vehicles(conn, msg):
     return [r["id"] for r in rows]
 
 
-def wanted_stops(vehicles_msg):
+def wanted_stops(vehicles_msg: gtfs_rt.FeedMessage) -> set[tuple[str, int]]:
     """(trip_id, stop_sequence) pairs the estimator can join a prediction to:
     each vehicle's current stop and the one after it, so the join still finds
     a row once the vehicle advances before the next poll.
@@ -151,7 +153,7 @@ def wanted_stops(vehicles_msg):
     poll, and observations only ever join the one they're at. Storing the
     rest filled 8 GB in twelve hours on the production box.
     """
-    keep = set()
+    keep: set[tuple[str, int]] = set()
     for entity in vehicles_msg.entity:
         if not entity.HasField("vehicle"):
             continue
@@ -163,7 +165,11 @@ def wanted_stops(vehicles_msg):
     return keep
 
 
-async def ingest_trip_updates(conn, msg, keep=None):
+async def ingest_trip_updates(
+    conn: asyncpg.Connection,
+    msg: gtfs_rt.FeedMessage,
+    keep: set[tuple[str, int]] | None = None,
+) -> int:
     """Insert predictions and derive a delay for each.
 
     `keep` is the set from wanted_stops(); None stores everything.
@@ -175,7 +181,7 @@ async def ingest_trip_updates(conn, msg, keep=None):
     departure_delay_s is departure against scheduled departure.
     """
     feed_ts = _utc(msg.header.timestamp) if msg.header.timestamp else _utc(0)
-    cols = [[] for _ in range(8)]
+    cols: list[list[Any]] = [[] for _ in range(8)]
 
     for entity in msg.entity:
         if not entity.HasField("trip_update"):
@@ -254,7 +260,7 @@ async def ingest_trip_updates(conn, msg, keep=None):
     return len(rows)
 
 
-async def check_static_feed(conn, position_ids):
+async def check_static_feed(conn: asyncpg.Connection, position_ids: list[int]) -> None:
     """How many of this poll's scheduled trips exist in the loaded feed, and
     whether that feed is still in date. Trip ids change with every rating,
     so a stale feed shows up here as vehicles quietly losing their delay."""
@@ -276,7 +282,7 @@ async def check_static_feed(conn, position_ids):
     STATE["trip_match_rate"] = None if rate is None else round(rate, 3)
     STATE["static_feed_end_date"] = end_date
 
-    today = dt.datetime.now(dt.timezone.utc).astimezone(ZoneInfo(AGENCY_TZ)).date()
+    today = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(AGENCY_TZ)).date()
     if end_date and dt.date.fromisoformat(end_date) < today:
         log.warning("static feed expired %s; run `python -m app.gtfs_static`", end_date)
     elif rate is not None and rate < MIN_TRIP_MATCH_RATE:
@@ -287,11 +293,11 @@ async def check_static_feed(conn, position_ids):
 PRUNE_BATCH = 20_000
 
 
-async def prune(conn):
+async def prune(conn: asyncpg.Connection) -> dict[str, int]:
     """Delete expired rows in batches, each its own transaction. One DELETE of
     an hour's worth of rows holds locks and floods the WAL long enough to
     stall the API on a one-core box."""
-    deleted = {}
+    deleted: dict[str, int] = {}
     for table, hours in RETENTION.items():
         total = 0
         while True:
@@ -318,8 +324,8 @@ async def prune(conn):
 HEARTBEAT_KEY = "poller_state"
 
 
-def snapshot():
-    def iso(v):
+def snapshot() -> dict[str, Any]:
+    def iso(v: dt.datetime | None) -> str | None:
         return v.isoformat() if v else None
 
     return {
@@ -337,7 +343,7 @@ def snapshot():
 
 # Written to the database rather than kept in memory so /health reports the
 # real poller even when it runs as a separate process.
-async def write_heartbeat(conn):
+async def write_heartbeat(conn: asyncpg.Connection) -> None:
     await conn.execute(
         """
         INSERT INTO feed_meta (key, value) VALUES ($1, $2)
@@ -348,12 +354,12 @@ async def write_heartbeat(conn):
     )
 
 
-async def read_heartbeat(conn):
+async def read_heartbeat(conn: asyncpg.Connection) -> dict[str, Any] | None:
     raw = await conn.fetchval("SELECT value FROM feed_meta WHERE key = $1", HEARTBEAT_KEY)
     return json.loads(raw) if raw else None
 
 
-async def poll_once(client):
+async def poll_once(client: httpx.AsyncClient) -> dict[str, Any]:
     vehicles_msg, updates_msg = await asyncio.gather(
         fetch(client, VEHICLE_POSITIONS_URL),
         fetch(client, TRIP_UPDATES_URL),
@@ -371,7 +377,7 @@ async def poll_once(client):
                 await check_static_feed(conn, new_ids)
 
     STATE.update(
-        last_poll=dt.datetime.now(dt.timezone.utc),
+        last_poll=dt.datetime.now(dt.UTC),
         feed_timestamp=(
             _utc(vehicles_msg.header.timestamp)
             if vehicles_msg.header.timestamp
@@ -386,7 +392,7 @@ async def poll_once(client):
     return STATE
 
 
-async def run_forever():
+async def run_forever() -> None:
     prune_interval = dt.timedelta(hours=1)
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         while True:
@@ -407,7 +413,7 @@ async def run_forever():
                 log.warning("poll failed: %s", STATE["last_error"])
 
             # wall clock, not a poll count: `polls` only advances on success
-            now = dt.datetime.now(dt.timezone.utc)
+            now = dt.datetime.now(dt.UTC)
             if STATE["last_prune"] is None or now - STATE["last_prune"] >= prune_interval:
                 try:
                     async with db.pool().acquire() as conn:

@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,7 +21,7 @@ log = logging.getLogger("tracker")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await db.connect()
 
     if not await db.pool().fetchval("SELECT count(*) FROM trip_stop_offset"):
@@ -72,12 +73,12 @@ app.include_router(analytics.router)
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, str | None]:
     return {"service": "transit-tracker", "docs": "/docs" if ENABLE_DOCS else None}
 
 
 @app.get("/healthz")
-async def healthz():
+async def healthz() -> dict[str, str]:
     """Load-balancer probe. /api/analytics/health counts rows and is far too
     expensive to poll."""
     await db.pool().fetchval("SELECT 1")

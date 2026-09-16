@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _int(name, default):
+def _int(name: str, default: int) -> int:
     return int(os.getenv(name, default))
 
 
@@ -39,7 +39,7 @@ BACKFILL_HOURS = _int("BACKFILL_HOURS", 24)
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
 
-def _bool(name, default):
+def _bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 

@@ -2,7 +2,7 @@
 and the confidence flags, run against a real PostGIS database with a synthetic
 route (see conftest.STATIC_SQL for the geometry and schedule)."""
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from app.services import delay
@@ -13,7 +13,7 @@ SERVICE_DATE = date(2026, 8, 5)
 
 def at(secs, service_date=SERVICE_DATE):
     """Same instant gtfs_ts() produces: noon minus 12h, plus secs, in UTC."""
-    noon = datetime.combine(service_date, time(12), tzinfo=TZ).astimezone(timezone.utc)
+    noon = datetime.combine(service_date, time(12), tzinfo=TZ).astimezone(UTC)
     return noon - timedelta(hours=12) + timedelta(seconds=secs)
 
 

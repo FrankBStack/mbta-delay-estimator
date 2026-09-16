@@ -11,6 +11,8 @@ ST_LineLocatePoint resolves a second-pass vehicle back to the start of the line.
 Sequence selects the leg, the fraction locates the vehicle along it.
 """
 
+import asyncpg
+
 from ..config import AGENCY_TZ, BACKFILL_HOURS, MAX_SNAP_ERROR_M
 
 # Beyond this, the cause is a service-date mismatch or a mid-run reassignment
@@ -110,7 +112,8 @@ resolved AS (
 scheduled AS (
     SELECT r.*,
            CASE r.method
-               WHEN 'layover'      THEN COALESCE(r.cur_departure_s, r.cur_arrival_s)::double precision
+               WHEN 'layover'      THEN COALESCE(r.cur_departure_s,
+                                                 r.cur_arrival_s)::double precision
                WHEN 'stopped_at'   THEN r.cur_arrival_s::double precision
                WHEN 'interpolated' THEN r.prev_departure_s
                                         + r.ratio * (r.cur_arrival_s - r.prev_departure_s)
@@ -185,14 +188,14 @@ RETURNING 1
 """
 
 
-async def compute(conn, position_ids):
+async def compute(conn: asyncpg.Connection, position_ids: list[int]) -> int:
     if not position_ids:
         return 0
     rows = await conn.fetch(COMPUTE_SQL, position_ids, AGENCY_TZ)
     return len(rows)
 
 
-async def backfill(conn, hours=None):
+async def backfill(conn: asyncpg.Connection, hours: int | None = None) -> int:
     """Recompute recent delays. The raw positions are already stored, so you
     can change the estimator and rebuild without waiting for new data.
 

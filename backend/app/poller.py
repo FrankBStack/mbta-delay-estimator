@@ -21,7 +21,7 @@ logging.basicConfig(
 log = logging.getLogger("tracker.poller")
 
 
-async def main():
+async def main() -> None:
     await db.connect()
     if not await db.pool().fetchval("SELECT count(*) FROM trip_stop_offset"):
         log.warning("trip_stop_offset is empty - run `python -m app.gtfs_static` "

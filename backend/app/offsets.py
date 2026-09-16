@@ -11,17 +11,20 @@ share 1,156 shapes, so this is ~24k geometry operations instead of 2.2M.
 
 import asyncio
 import time
+from typing import Any
+
+import asyncpg
 
 from . import db
 
 
-async def build():
+async def build() -> dict[str, Any]:
     pool = await db.connect()
     async with pool.acquire() as conn:
         return await _build(conn)
 
 
-async def _build(conn):
+async def _build(conn: asyncpg.Connection) -> dict[str, Any]:
     print("computing stop offsets along shapes")
     started = time.monotonic()
 
@@ -102,7 +105,8 @@ async def _build(conn):
                count(DISTINCT trip_id)                            AS trips,
                count(DISTINCT trip_id) FILTER (WHERE NOT frac_monotonic) AS non_monotonic,
                round(avg(snap_error_m)::numeric, 1)               AS mean_snap_m,
-               round(percentile_cont(0.95) WITHIN GROUP (ORDER BY snap_error_m)::numeric, 1) AS p95_snap_m,
+               round(percentile_cont(0.95) WITHIN GROUP (ORDER BY snap_error_m)::numeric, 1)
+                                                                  AS p95_snap_m,
                round(max(snap_error_m)::numeric, 1)               AS max_snap_m
         FROM trip_stop_offset
         """
@@ -118,7 +122,7 @@ async def _build(conn):
 
 
 if __name__ == "__main__":
-    async def _main():
+    async def _main() -> None:
         try:
             await build()
         finally:

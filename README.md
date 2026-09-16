@@ -2,11 +2,13 @@
 
 [![CI](https://github.com/FrankBStack/mbta-delay-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/FrankBStack/mbta-delay-estimator/actions/workflows/ci.yml)
 
+**Live at [mbta.frankbs.dev](https://mbta.frankbs.dev).**
+
 Real-time map of Boston transit vehicles. Delays are computed from each
 vehicle's physical position against the published timetable, not read from the
-agency feed. Over a weekday evening peak the computed figure lands within a
-minute of the MBTA's own prediction 88.8% of the time (σ 50s); see
-[Validation](#validation).
+agency feed. Over a weekday morning peak the computed figure lands within a
+minute of the MBTA's own prediction 90% of the time, with a median difference
+of nine seconds; see [Validation](#validation).
 
 ![Live map of Boston with vehicles colored by delay, alongside a panel comparing the position-derived figure to the MBTA's predictions](docs/screenshot.png)
 
@@ -65,15 +67,29 @@ the full placement and confidence rules.
 
 Since the MBTA publishes no delay field, its figure is derived for comparison
 from the same trip and stop: predicted arrival against scheduled arrival, or
-predicted departure against scheduled departure for a vehicle on layover. Over
-a weekday evening peak (87,461 paired observations) the two agreed to within
-60s 88.8% of the time, with σ 50s. They answer different questions (ours is how
-late a vehicle is right now, theirs is how late it will be on arrival), so they
-diverge most at peak service.
+predicted departure against scheduled departure for a vehicle on layover. They
+answer different questions (ours is how late a vehicle is right now, theirs is
+how late it will be on arrival), so they diverge most at peak service.
 
-[docs/validation.md](docs/validation.md) has the full breakdown: agreement by
-service level and placement method, per-route examples, and a bug in
-first-stop handling that the comparison caught.
+Measured on Wednesday 16 September 2026, thinned to one observation per vehicle
+per minute:
+
+| | Morning peak (07:00–09:10) | Overnight (00:17–05:00) |
+|---|---:|---:|
+| Paired observations | 80,535 | 14,032 |
+| Distinct vehicles | 831 | 358 |
+| Median divergence | +9s | +7s |
+| p10 / p90 | −12s / +52s | −12s / +42s |
+| Within 60s of feed | 90.0% | 93.0% |
+| Within 120s of feed | 96.6% | 98.1% |
+
+The comparison has caught two estimator bugs so far. Scoring the same
+observations with and without the most recent fix, the dwell hold, moved the
+share within 60s at peak from 85.0% to 90.0% and cut the stopped-at class's
+mean absolute divergence from 30s to 11s. It also exposed a case the hold gets
+wrong, listed under limitations. [docs/validation.md](docs/validation.md) has
+the before-and-after tables, the breakdown by service level and placement
+method, and the earlier first-stop bug.
 
 ## API
 
@@ -89,6 +105,20 @@ first-stop handling that the comparison caught.
 | `GET /api/analytics/health` | Poller liveness and data volume |
 
 Interactive documentation at `/docs`.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    feeds[("MBTA GTFS-realtime<br/>positions + predictions")] -->|every 15s| poller
+    gtfs[("MBTA static GTFS")] -->|weekly| load["load job<br/>gtfs_static, offsets"]
+    poller["poller<br/>ingest, estimate, prune"] --> db[("PostGIS")]
+    load --> db
+    browser["React + MapLibre"] --> caddy["Caddy<br/>TLS"] --> nginx["nginx<br/>static files, /api proxy"] --> api["FastAPI<br/>read-only, cached"] --> db
+```
+
+Only the poller writes realtime rows; the API reads. The two run as separate
+containers so API replicas never double-poll.
 
 ## Project layout
 
@@ -174,5 +204,9 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 - The feed comparison is null when no prediction falls within five minutes of an
   observation, rather than reaching for a more distant one. Those rows still
   carry a computed delay, just nothing to compare it against.
+- A stopped vehicle's delay is held at what it was on arrival. That is right
+  for a normal dwell and wrong for a vehicle stuck at a stop for half an hour,
+  which keeps reading as a few minutes late while the feed's prediction grows.
+  A cap on the hold is the planned fix.
 - The projection is specific to Massachusetts. Targeting another city means
   changing the SRID, not only the feed URLs.

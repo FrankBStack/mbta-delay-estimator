@@ -21,7 +21,9 @@ import pathlib
 import sys
 import time
 import zipfile
+from collections.abc import Iterator
 
+import asyncpg
 import httpx
 
 from . import db, offsets
@@ -34,7 +36,7 @@ CACHE_MAX_AGE_H = 24
 csv.field_size_limit(10_000_000)
 
 
-def parse_gtfs_time(value):
+def parse_gtfs_time(value: str | None) -> int | None:
     """'25:10:00' -> 90600. Times run past 24h for trips belonging to the
     previous service day, so this can't go through a time type."""
     if not value:
@@ -49,20 +51,20 @@ def parse_gtfs_time(value):
     return h * 3600 + m * 60 + s
 
 
-def parse_date(value):
+def parse_date(value: str | None) -> dt.date | None:
     if not value or len(value) != 8:
         return None
     return dt.date(int(value[:4]), int(value[4:6]), int(value[6:8]))
 
 
-def _int(value):
+def _int(value: str | None) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
 
 
-def _float(value):
+def _float(value: str | None) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -70,14 +72,14 @@ def _float(value):
 
 
 class Feed:
-    def __init__(self, path):
+    def __init__(self, path: pathlib.Path) -> None:
         self.zf = zipfile.ZipFile(path)
         self.names = set(self.zf.namelist())
 
-    def has(self, name):
+    def has(self, name: str) -> bool:
         return name in self.names
 
-    def rows(self, name):
+    def rows(self, name: str) -> Iterator[dict[str, str]]:
         if name not in self.names:
             return
         with self.zf.open(name) as raw:
@@ -86,11 +88,11 @@ class Feed:
             text = io.TextIOWrapper(raw, encoding="utf-8-sig", newline="")
             yield from csv.DictReader(text)
 
-    def close(self):
+    def close(self) -> None:
         self.zf.close()
 
 
-async def download(url, dest):
+async def download(url: str, dest: pathlib.Path) -> pathlib.Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"downloading {url}")
     started = time.monotonic()
@@ -111,7 +113,7 @@ async def download(url, dest):
     return dest
 
 
-async def load_routes(conn, feed):
+async def load_routes(conn: asyncpg.Connection, feed: Feed) -> int:
     rows = []
     for r in feed.rows("routes.txt"):
         # 0 is light rail, so no `or 3` here
@@ -136,7 +138,7 @@ async def load_routes(conn, feed):
     return len(rows)
 
 
-async def load_stops(conn, feed):
+async def load_stops(conn: asyncpg.Connection, feed: Feed) -> int:
     records = []
     for r in feed.rows("stops.txt"):
         lat, lon = _float(r.get("stop_lat", "")), _float(r.get("stop_lon", ""))
@@ -167,7 +169,7 @@ async def load_stops(conn, feed):
     return len(records)
 
 
-async def load_shapes(conn, feed):
+async def load_shapes(conn: asyncpg.Connection, feed: Feed) -> int:
     """shapes.txt is a flat point list; stitch them into LineStrings."""
     by_shape = {}
     for r in feed.rows("shapes.txt"):
@@ -210,7 +212,7 @@ async def load_shapes(conn, feed):
     return len(records)
 
 
-async def load_trips(conn, feed):
+async def load_trips(conn: asyncpg.Connection, feed: Feed) -> int:
     known_shapes = {r["shape_id"] for r in await conn.fetch("SELECT shape_id FROM shape")}
     known_routes = {r["route_id"] for r in await conn.fetch("SELECT route_id FROM route")}
     records = []
@@ -237,13 +239,13 @@ async def load_trips(conn, feed):
     return len(records)
 
 
-async def load_stop_times(conn, feed):
+async def load_stop_times(conn: asyncpg.Connection, feed: Feed) -> int:
     """~2.2M rows for the MBTA, so stream it straight into COPY."""
     known_trips = {r["trip_id"] for r in await conn.fetch("SELECT trip_id FROM trip")}
     count = 0
     seen = set()
 
-    def records():
+    def records() -> Iterator[tuple[str, int, str, int | None, int | None]]:
         nonlocal count
         for r in feed.rows("stop_times.txt"):
             trip_id = r["trip_id"]
@@ -274,7 +276,7 @@ async def load_stop_times(conn, feed):
     return count
 
 
-async def load_calendar(conn, feed):
+async def load_calendar(conn: asyncpg.Connection, feed: Feed) -> tuple[int, int]:
     cal = []
     for r in feed.rows("calendar.txt"):
         start = parse_date(r.get("start_date", ""))
@@ -308,7 +310,7 @@ async def load_calendar(conn, feed):
     return len(cal), len(dates)
 
 
-async def run(zip_path, keep):
+async def run(zip_path: pathlib.Path | None, keep: bool) -> None:
     downloaded = False
     if zip_path is None:
         zip_path = CACHE / "gtfs.zip"
@@ -348,7 +350,7 @@ async def run(zip_path, keep):
                 info = next(iter(feed.rows("feed_info.txt")), {})
                 end_date = parse_date(info.get("feed_end_date", ""))
                 meta = {
-                    "loaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    "loaded_at": dt.datetime.now(dt.UTC).isoformat(),
                     "source": GTFS_STATIC_URL,
                     "feed_version": info.get("feed_version") or "",
                     "feed_end_date": end_date.isoformat() if end_date else "",
@@ -373,7 +375,7 @@ async def run(zip_path, keep):
             zip_path.unlink(missing_ok=True)
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Load static GTFS into PostGIS")
     ap.add_argument("--zip", type=pathlib.Path, help="load a local zip instead of downloading")
     ap.add_argument("--keep", action="store_true", help="keep the download in .cache")

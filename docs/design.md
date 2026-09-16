@@ -35,8 +35,14 @@ is real: the timetable does expect the vehicle to have left.
 
 Before the dwell hold, the mean divergence from the feed was +19s; most of that
 came from comparing a dwelling vehicle's clock reading against the feed's
-recorded arrival. The headline validation figures were measured before this
-change and have not yet been re-measured.
+recorded arrival. Measured on identical observations, the hold cut the
+`stopped_at` class's mean absolute divergence from 30s to 11s at peak
+([docs/validation.md](validation.md)).
+
+The hold has one known failure: a vehicle that arrives a few minutes late and
+then sits for half an hour reads as a few minutes late for the whole time,
+while the feed's prediction keeps growing. A cap on how long the hold applies
+past scheduled departure would fix it and is not yet implemented.
 
 ## Idle layovers
 

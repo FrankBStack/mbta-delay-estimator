@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -10,9 +10,9 @@ router = APIRouter(prefix="/api", tags=["vehicles"])
 @router.get("/vehicles")
 async def vehicles(
     max_age_s: int = Query(300, ge=30, le=3600),
-    route_id: Optional[str] = None,
-    route_type: Optional[int] = Query(None, ge=0, le=7),
-):
+    route_id: str | None = None,
+    route_type: int | None = Query(None, ge=0, le=7),
+) -> dict[str, Any]:
     """Latest position per vehicle, as GeoJSON.
 
     The delay join is LEFT: a vehicle on a trip we can't place still belongs on
@@ -24,7 +24,9 @@ async def vehicles(
     )
 
 
-async def _vehicles(max_age_s, route_id, route_type):
+async def _vehicles(
+    max_age_s: int, route_id: str | None, route_type: int | None
+) -> dict[str, Any]:
     rows = await db.pool().fetch(
         """
         WITH latest AS (
@@ -89,7 +91,9 @@ async def _vehicles(max_age_s, route_id, route_type):
 
 
 @router.get("/vehicles/{vehicle_id}/history")
-async def history(vehicle_id: str, minutes: int = Query(60, ge=5, le=720)):
+async def history(
+    vehicle_id: str, minutes: int = Query(60, ge=5, le=720)
+) -> dict[str, Any]:
     """Breadcrumb trail with the delay computed at each point."""
     rows = await db.pool().fetch(
         """

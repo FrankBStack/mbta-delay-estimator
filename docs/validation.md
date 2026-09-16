@@ -26,7 +26,87 @@ predicted arrival gave +34s, against predicted departure −17s, for both the
 during-dwell clock reading against an at-arrival figure. Idle layovers (method
 `layover`, delay 0) are now excluded from all aggregates, and `first_stop` is
 floored at zero like `layover`, which the −127s in the peak table called for.
-Figures after these changes are not yet in this document.
+The effect of the dwell hold, measured on identical observations, is in the
+next section.
+
+## The dwell hold, before and after
+
+Measured on Wednesday 16 September 2026 over the same two service windows as
+the July tables below. Both columns score the same observations against the
+same feed values; the only difference is the estimator. The "clock" column
+re-derives the pre-hold figure from each observation's stored scheduled time,
+so `stopped_at` and `first_stop` rows read as the clock would have measured
+them and every other method is unchanged. (The like-for-like feed pairing that
+landed in the same commit applies to both columns and cannot be undone from
+stored data.)
+
+Morning peak, 07:00–09:10. 80,809 observations after thinning, 80,535 with a
+feed figure to compare against, 831 vehicles on 167 routes:
+
+| Metric | Clock | Dwell hold |
+|---|---:|---:|
+| Mean divergence | +24s | +15s |
+| Median divergence | +16s | +9s |
+| p10 / p90 | −11s / +71s | −12s / +52s |
+| Within 60s of feed | 85.0% | 90.0% |
+| Within 120s of feed | 95.6% | 96.6% |
+| Standard deviation | 67s | 82s |
+| Correlation with feed | 0.9877 | 0.9813 |
+
+Overnight, 00:17–05:00. 14,111 observations, 14,032 compared, 358 vehicles on
+108 routes:
+
+| Metric | Clock | Dwell hold |
+|---|---:|---:|
+| Mean divergence | +16s | +8s |
+| Median divergence | +10s | +7s |
+| p10 / p90 | −12s / +52s | −12s / +42s |
+| Within 60s of feed | 91.1% | 93.0% |
+| Within 120s of feed | 97.5% | 98.1% |
+| Standard deviation | 45s | 120s |
+| Correlation with feed | 0.9952 | 0.9656 |
+
+By placement method at peak, mean absolute divergence:
+
+| Method | Compared | Clock | Dwell hold |
+|---|---:|---:|---:|
+| `interpolated` | 45,901 | 39s | 39s |
+| `stopped_at` | 32,116 | 30s | 11s |
+| `layover` | 2,372 | 35s | 35s |
+| `first_stop` | 146 | 208s | 34s |
+
+The hold does what it was meant to: the `stopped_at` class, which is 40% of
+peak observations, went from the worst-agreeing mid-route method to the best,
+and the systematic offset in the headline mean roughly halved. The p90 moved by
+19 seconds; the p10 did not move at all, which is what you'd expect from a
+change that only affects vehicles reading late while they dwell.
+
+### Where it made things worse
+
+Standard deviation and correlation both got worse, and the reason is a small
+tail, not the bulk. At peak, 72 of 80,535 compared observations diverge by
+more than ten minutes. Leaving those out, the standard deviation is 49s under
+the hold against 67s by the clock, and 37s against 45s overnight.
+
+The tail splits two ways:
+
+- 46 are `interpolated` and were outliers before the change too. They are
+  vehicles reporting a trip whose schedule is nowhere near them, such as two
+  Red Line trains reading 78 minutes early while the feed had them 21 minutes
+  late. That is a trip assignment problem, below the three-hour cutoff that
+  would have flagged it low confidence.
+- 26 are `stopped_at`, of which 16 are new. All have the same shape: the
+  vehicle arrived a few minutes late and then sat at the stop, for a median of
+  19 minutes and up to 98. One Green Line C train arrived five minutes late
+  and stayed for an hour and forty minutes; the hold reports it five minutes
+  late while the clock and the feed both say an hour and forty-three.
+
+The second group is a real limitation of the hold. It is correct for a normal
+dwell of a minute or two, where the clock reading is an artefact of the
+schedule having no dwell time, and wrong for a vehicle that is genuinely
+stuck. The fix is a cap: once a vehicle has sat past its scheduled departure
+by more than some threshold, fall back to the clock. That is not yet
+implemented.
 
 ## The first-stop bug
 

@@ -37,6 +37,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: pip install -r requirements-dev.txt
+      - run: ruff check .
       - run: python -m pytest
 
   frontend:

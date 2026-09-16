@@ -1,0 +1,12 @@
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "ANN"]
+ignore = ["ANN401"]
+
+[lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Query"]

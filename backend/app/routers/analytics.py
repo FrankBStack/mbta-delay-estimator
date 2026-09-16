@@ -10,7 +10,7 @@ drags a fleet median toward "on time".
 """
 
 import shutil
-from typing import Optional
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -25,17 +25,17 @@ CONFIDENCE_FILTER = (
 )
 
 
-def _levels(include_low):
+def _levels(include_low: bool) -> list[str]:
     return ["high", "medium", "low"] if include_low else ["high", "medium"]
 
 
 @router.get("/delay-by-route")
 async def delay_by_route(
     minutes: int = Query(60, ge=5, le=1440),
-    route_type: Optional[int] = Query(None, ge=0, le=7),
+    route_type: int | None = Query(None, ge=0, le=7),
     min_observations: int = Query(3, ge=1, le=1000),
     include_low_confidence: bool = False,
-):
+) -> dict[str, Any]:
     return await cache.get_or_set(
         ("delay-by-route", minutes, route_type, min_observations, include_low_confidence),
         lambda: _delay_by_route(minutes, route_type, min_observations, include_low_confidence),
@@ -43,7 +43,9 @@ async def delay_by_route(
     )
 
 
-async def _delay_by_route(minutes, route_type, min_observations, include_low_confidence):
+async def _delay_by_route(
+    minutes: int, route_type: int | None, min_observations: int, include_low_confidence: bool
+) -> dict[str, Any]:
     # mean_divergence_s only averages rows where both numbers exist, so it's a
     # like-for-like difference rather than the difference of two means
     rows = await db.pool().fetch(
@@ -106,7 +108,7 @@ async def _delay_by_route(minutes, route_type, min_observations, include_low_con
 async def divergence(
     minutes: int = Query(60, ge=5, le=1440),
     include_low_confidence: bool = False,
-):
+) -> dict[str, Any]:
     """How closely our number tracks the MBTA's. Read the spread and the share
     within 60s first. Correlation is reported but is a weak test here: both
     figures share the same schedule baseline and vehicle position, and delays
@@ -140,7 +142,7 @@ THINNED = f"""
 """
 
 
-async def _divergence(minutes, include_low_confidence):
+async def _divergence(minutes: int, include_low_confidence: bool) -> dict[str, Any]:
     row = await db.pool().fetchrow(
         f"""
         WITH d AS ({THINNED})
@@ -204,9 +206,9 @@ async def _divergence(minutes, include_low_confidence):
 async def timeline(
     minutes: int = Query(180, ge=15, le=1440),
     bucket_minutes: int = Query(5, ge=1, le=60),
-    route_id: Optional[str] = None,
+    route_id: str | None = None,
     include_low_confidence: bool = False,
-):
+) -> dict[str, Any]:
     return await cache.get_or_set(
         ("timeline", minutes, bucket_minutes, route_id, include_low_confidence),
         lambda: _timeline(minutes, bucket_minutes, route_id, include_low_confidence),
@@ -214,7 +216,9 @@ async def timeline(
     )
 
 
-async def _timeline(minutes, bucket_minutes, route_id, include_low_confidence):
+async def _timeline(
+    minutes: int, bucket_minutes: int, route_id: str | None, include_low_confidence: bool
+) -> dict[str, Any]:
     rows = await db.pool().fetch(
         f"""
         SELECT to_timestamp(
@@ -251,12 +255,12 @@ async def _timeline(minutes, bucket_minutes, route_id, include_low_confidence):
 
 
 @router.get("/health")
-async def health():
+async def health() -> dict[str, Any]:
     """Diagnostics, not a probe -- these are unbounded counts. Use /healthz."""
     return await cache.get_or_set(("health",), _health, ttl_s=15)
 
 
-async def _health():
+async def _health() -> dict[str, Any]:
     counts = await db.pool().fetchrow(
         """
         SELECT (SELECT count(*) FROM vehicle_position
