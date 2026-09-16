@@ -220,6 +220,7 @@ export default function App() {
             vehicles={vehicles}
             divergence={divergence}
             windowMinutes={windowMinutes}
+            routeType={routeType}
           />
 
           {selected && (
