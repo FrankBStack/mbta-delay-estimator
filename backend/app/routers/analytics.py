@@ -259,7 +259,8 @@ async def _timeline(
 
 @router.get("/health")
 async def health() -> dict[str, Any]:
-    """Diagnostics, not a probe -- these are unbounded counts. Use /healthz."""
+    """Diagnostics, not a probe; use /healthz for that. total_positions is
+    the planner's estimate, everything else is exact over a bounded window."""
     return await cache.get_or_set(("health",), _health, ttl_s=15)
 
 
@@ -270,7 +271,10 @@ async def _health() -> dict[str, Any]:
                  WHERE ts > now() - interval '5 minutes')      AS recent_positions,
                (SELECT count(*) FROM delay_observation
                  WHERE ts > now() - interval '60 minutes')     AS recent_delays,
-               (SELECT count(*) FROM vehicle_position)         AS total_positions,
+               -- the planner's estimate: an exact count scans the whole
+               -- table, 12s for 48h of positions on the production box
+               (SELECT GREATEST(reltuples, 0)::bigint FROM pg_class
+                 WHERE oid = 'vehicle_position'::regclass)     AS total_positions,
                (SELECT count(*) FROM trip)                     AS trips,
                (SELECT value FROM feed_meta WHERE key = 'loaded_at') AS gtfs_loaded_at,
                (SELECT value FROM feed_meta WHERE key = 'feed_version') AS gtfs_version,

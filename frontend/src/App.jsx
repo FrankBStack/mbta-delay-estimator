@@ -62,6 +62,10 @@ export default function App() {
   const filters = useRef({ routeType, windowMinutes });
   filters.current = { routeType, windowMinutes };
 
+  // The vehicle poll reads the latest health from here instead of waiting
+  // on it: diagnostics must never hold up the map.
+  const lastHealth = useRef(null);
+
   // live poll, backing off while it fails
   useEffect(() => {
     let alive = true;
@@ -71,15 +75,11 @@ export default function App() {
     const tick = async () => {
       let ok = false;
       try {
-        const [v, h] = await Promise.all([
-          api.vehicles({ route_type: filters.current.routeType }),
-          api.health(),
-        ]);
+        const v = await api.vehicles({ route_type: filters.current.routeType });
         if (!alive) return;
-        const age = secondsAgo(h?.poller?.feed_timestamp);
+        const age = secondsAgo(lastHealth.current?.poller?.feed_timestamp);
         const feedStale = age !== null && age > STALE_AFTER_S;
         setVehicles((prev) => keepLastGood(prev, v, feedStale));
-        setHealth(h);
         setError(null);
         failures = 0;
         ok = true;
@@ -100,6 +100,37 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [routeType]);
+
+  // health poll: the feed time in the topbar and what the status banner reads.
+  // A failure here just leaves the last answer in place; the vehicle poll owns
+  // the error banner.
+  useEffect(() => {
+    let alive = true;
+    let timer;
+    let delay = POLL_STEPS_MS[0];
+    const tick = async () => {
+      let ok = false;
+      try {
+        const h = await api.health();
+        if (!alive) return;
+        lastHealth.current = h;
+        setHealth(h);
+        ok = true;
+      } catch {
+        ok = false;
+      } finally {
+        if (alive) {
+          delay = nextDelay(delay, ok);
+          timer = setTimeout(tick, delay);
+        }
+      }
+    };
+    tick();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   // analytics poll
   useEffect(() => {
