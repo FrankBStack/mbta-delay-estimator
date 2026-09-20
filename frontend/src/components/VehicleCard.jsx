@@ -4,6 +4,7 @@ import {
   formatDelay,
   formatSigned,
   METHOD_LABELS,
+  noDelayLabel,
   secondsAgo,
 } from "../lib/delay.js";
 
@@ -61,7 +62,7 @@ export default function VehicleCard({ vehicle, onClose }) {
         <dt>Difference</dt>
         <dd>{formatSigned(p.divergence_s)}</dd>
         <dt>Placed by</dt>
-        <dd>{METHOD_LABELS[p.method] ?? "Not placeable"}</dd>
+        <dd>{METHOD_LABELS[p.method] ?? noDelayLabel(p.no_delay_reason)}</dd>
         <dt>Confidence</dt>
         <dd className={`conf conf-${p.confidence ?? "none"}`}>
           {p.confidence ?? "—"}

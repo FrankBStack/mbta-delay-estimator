@@ -80,3 +80,19 @@ export const METHOD_LABELS = {
   layover: "On layover at origin",
   first_stop: "Approaching first stop",
 };
+
+// Why a vehicle carries no delay; codes come from /api/vehicles. Nearly all
+// of them mean the MBTA publishes no schedule for that vehicle to be late
+// against, which is not the same as failing to place it.
+export const NO_DELAY_LABELS = {
+  shuttle: "Replacement shuttle, no timetable",
+  added_trip: "Unscheduled trip added by the MBTA",
+  unknown_trip: "Trip not in the loaded timetable",
+  no_trip: "Not assigned to a trip",
+  no_stop_sequence: "Feed gives no stop to measure against",
+  unplaced: "Could not be placed on its route",
+};
+
+export function noDelayLabel(reason) {
+  return NO_DELAY_LABELS[reason] ?? "No timetable";
+}

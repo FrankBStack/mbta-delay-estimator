@@ -45,7 +45,18 @@ async def _vehicles(
                t.trip_headsign,
                s.stop_name,
                d.computed_delay_s, d.feed_delay_s, d.divergence_s,
-               d.method, d.confidence
+               d.method, d.confidence,
+               -- why there is no delay, so the map can say so rather than
+               -- look like the estimator failed; most have no schedule at all
+               CASE
+                   WHEN d.vehicle_id IS NOT NULL            THEN NULL
+                   WHEN l.route_id LIKE 'Shuttle%'          THEN 'shuttle'
+                   WHEN l.trip_id LIKE 'ADDED%'             THEN 'added_trip'
+                   WHEN l.trip_id IS NULL                   THEN 'no_trip'
+                   WHEN t.trip_id IS NULL                   THEN 'unknown_trip'
+                   WHEN l.current_stop_sequence IS NULL     THEN 'no_stop_sequence'
+                   ELSE 'unplaced'
+               END AS no_delay_reason
         FROM latest l
         LEFT JOIN route r ON r.route_id = l.route_id
         LEFT JOIN trip  t ON t.trip_id  = l.trip_id
@@ -83,6 +94,7 @@ async def _vehicles(
                 "divergence_s": r["divergence_s"],
                 "method": r["method"],
                 "confidence": r["confidence"],
+                "no_delay_reason": r["no_delay_reason"],
             },
         }
         for r in rows

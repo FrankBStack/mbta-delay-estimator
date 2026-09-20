@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { formatDelay } from "../lib/delay.js";
+import { formatDelay, noDelayLabel } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -262,7 +262,7 @@ function tooltip(p) {
   const delay = document.createElement("div");
   delay.textContent =
     p.computed_delay_s === null || p.computed_delay_s === undefined
-      ? "Not placeable"
+      ? noDelayLabel(p.no_delay_reason)
       : formatDelay(p.computed_delay_s);
   el.append(title, headsign, delay);
   return el;

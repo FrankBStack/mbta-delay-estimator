@@ -9,6 +9,7 @@ import {
   delayColorExpression,
   formatDelay,
   formatSigned,
+  noDelayLabel,
   secondsAgo,
 } from "./delay.js";
 
@@ -167,5 +168,19 @@ describe("METHOD_LABELS", () => {
     expect(Object.keys(METHOD_LABELS).sort()).toEqual(
       ["first_stop", "interpolated", "layover", "stopped_at"].sort()
     );
+  });
+});
+
+describe("noDelayLabel", () => {
+  it("names the cause the API reports", () => {
+    expect(noDelayLabel("shuttle")).toBe("Replacement shuttle, no timetable");
+    expect(noDelayLabel("added_trip")).toBe("Unscheduled trip added by the MBTA");
+    expect(noDelayLabel("unknown_trip")).toBe("Trip not in the loaded timetable");
+  });
+
+  it("falls back for a missing or unrecognised code", () => {
+    expect(noDelayLabel(null)).toBe("No timetable");
+    expect(noDelayLabel(undefined)).toBe("No timetable");
+    expect(noDelayLabel("something-new")).toBe("No timetable");
   });
 });

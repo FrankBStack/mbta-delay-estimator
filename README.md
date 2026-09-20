@@ -195,8 +195,13 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 
 - Delay computation requires `current_stop_sequence`. Vehicles reporting a
   position without one appear on the map unfilled, carrying no delay figure.
-- Trips added in realtime (`schedule_relationship: ADDED`) have no static
-  schedule to compare against and are skipped by the estimator.
+- Trips added in realtime (`schedule_relationship: ADDED`) and replacement
+  shuttles have no static schedule to compare against. They are drawn without
+  a delay and the map says which case applies. The Green Line often runs
+  mostly as added trips: on a Saturday evening with a rail diversion, 297 of
+  371 vehicles could be scored and only 2 of 26 light rail vehicles were among
+  them, so the headline median under-represents light rail at those times.
+  Every vehicle running a scheduled trip was placed.
 - Fleet size varies by a factor of three across the service day (231 distinct
   vehicles overnight against 765 at morning peak), and agreement with the feed
   is measurably weaker at peak. Any single-window figure should be read against

@@ -276,7 +276,7 @@ export default function App() {
           ))}
           <span className="legend-item">
             <span className="chip chip-hollow" />
-            Not placeable
+            No timetable
           </span>
           <span className="legend-note">
             Nose points the direction of travel. Trains are drawn larger.
