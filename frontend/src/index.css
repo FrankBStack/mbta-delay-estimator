@@ -480,10 +480,18 @@ main {
 /* MapLibre's own chrome, toned down to match. */
 .maplibregl-ctrl-attrib {
   background: rgba(18, 18, 26, 0.8) !important;
+  /* the bare text ("© … contributors") too, not only the links: MapLibre's
+     default is black, meant for its own white pill */
+  color: var(--text-muted) !important;
   font-size: 10px;
 }
 .maplibregl-ctrl-attrib a {
   color: var(--text-muted) !important;
+}
+/* the toggle's info icon is drawn in black for the same white pill */
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+  opacity: 0.6;
 }
 
 /* hover tooltip */
