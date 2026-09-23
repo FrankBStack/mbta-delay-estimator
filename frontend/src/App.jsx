@@ -51,8 +51,11 @@ export default function App() {
   const [hoverShape, setHoverShape] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
   const [hoveredVehicleId, setHoveredVehicleId] = useState(null);
-  // phones only: the sidebar is a bottom sheet
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // phones only: the sidebar is a bottom sheet. "half" leaves the top of the
+  // map visible for the vehicle just tapped.
+  const [sheet, setSheet] = useState("peek");
+  const sidebar = useRef(null);
+  const touch = useRef(null);
   const [routeType, setRouteType] = useState(null);
   const [windowMinutes, setWindowMinutes] = useState(60);
   const [error, setError] = useState(null);
@@ -188,8 +191,26 @@ export default function App() {
 
   const handleSelect = useCallback((id) => {
     setSelectedVehicleId(id);
-    if (id) setSheetOpen(true);
+    if (id) {
+      setSheet("half");
+      sidebar.current?.scrollTo(0, 0);
+    } else {
+      setSheet((s) => (s === "half" ? "peek" : s));
+    }
   }, []);
+
+  // swipe up opens the sheet; swipe down from the top of its content closes it
+  const onTouchStart = (e) => {
+    touch.current = { y: e.touches[0].clientY, top: sidebar.current?.scrollTop ?? 0 };
+  };
+  const onTouchEnd = (e) => {
+    const start = touch.current;
+    touch.current = null;
+    if (!start) return;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (dy < -40) setSheet("full");
+    else if (dy > 40 && start.top === 0) setSheet("peek");
+  };
   const handleHover = useCallback((id) => setHoveredVehicleId(id), []);
 
   const feedAge = secondsAgo(health?.poller?.feed_timestamp);
@@ -283,12 +304,22 @@ export default function App() {
           </span>
         </div>
 
-        <aside className="sidebar" data-open={sheetOpen}>
+        <aside
+          ref={sidebar}
+          className="sidebar"
+          data-open={sheet}
+          onClick={sheet === "peek" ? () => setSheet("full") : undefined}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
           <button
             className="sheet-handle"
-            aria-label={sheetOpen ? "Collapse panel" : "Expand panel"}
-            aria-expanded={sheetOpen}
-            onClick={() => setSheetOpen((o) => !o)}
+            aria-label={sheet === "peek" ? "Expand panel" : "Collapse panel"}
+            aria-expanded={sheet !== "peek"}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSheet((s) => (s === "peek" ? "full" : "peek"));
+            }}
           >
             <span />
           </button>
@@ -301,10 +332,7 @@ export default function App() {
           />
 
           {selected && (
-            <VehicleCard
-              vehicle={selected}
-              onClose={() => setSelectedVehicleId(null)}
-            />
+            <VehicleCard vehicle={selected} onClose={() => handleSelect(null)} />
           )}
 
           <div className="panel-block">

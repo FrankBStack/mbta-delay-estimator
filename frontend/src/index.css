@@ -527,10 +527,11 @@ main {
 }
 
 /* Phones: the map takes the screen and the sidebar becomes a bottom sheet
-   that peeks the headline and expands on tap. */
-@media (max-width: 760px) {
+   that peeks the headline, opens halfway for a tapped vehicle, and fully on
+   tap or swipe. MapView.jsx mirrors the query and the half height. */
+@media (max-width: 760px) and (orientation: portrait) {
   main {
-    --peek: 178px;
+    --peek: 150px;
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
   }
@@ -540,28 +541,38 @@ main {
     right: 0;
     bottom: 0;
     z-index: 5;
-    max-height: 82%;
+    height: var(--peek);
     border-left: 0;
     border-top: 1px solid var(--border);
     border-radius: 14px 14px 0 0;
-    padding-top: 4px;
+    padding-top: 0;
     gap: 16px;
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
-    transform: translateY(calc(100% - var(--peek)));
-    transition: transform 0.25s ease;
+    transition: height 0.25s ease;
     overflow-y: hidden;
+    overscroll-behavior: contain;
+    cursor: pointer;
   }
-  .sidebar[data-open="true"] {
-    transform: none;
+  .sidebar[data-open="half"] {
+    height: 50%;
+  }
+  .sidebar[data-open="full"] {
+    height: 82%;
+  }
+  .sidebar[data-open="half"],
+  .sidebar[data-open="full"] {
     overflow-y: auto;
+    cursor: auto;
   }
   .sheet-handle {
     display: flex;
     justify-content: center;
+    align-items: center;
     background: transparent;
     border: 0;
-    padding: 6px 0 2px;
+    height: 28px;
     margin: 0 -16px;
+    flex: none;
     cursor: pointer;
   }
   .sheet-handle span {
@@ -569,6 +580,19 @@ main {
     height: 4px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.22);
+  }
+  /* the tapped vehicle goes first, so the half-open sheet shows it */
+  .sheet-handle {
+    order: -2;
+  }
+  .vehicle-card {
+    order: -1;
+  }
+  .sidebar[data-open="peek"] .hero-agreement {
+    display: none;
+  }
+  .hero {
+    padding-top: 0;
   }
   .hero-value {
     font-size: 34px;
@@ -582,20 +606,43 @@ main {
     justify-content: space-between;
     gap: 6px;
   }
+  /* finger-sized */
   .segmented button {
-    padding: 5px 8px;
+    padding: 9px 8px;
     font-size: 11px;
   }
-  /* a two-row strip across the top instead of a column down the side */
+  .ghost-btn {
+    padding: 7px 11px;
+  }
+  .maplibregl-ctrl-group > button {
+    width: 38px;
+    height: 38px;
+  }
+  /* keep the attribution above the collapsed sheet */
+  .maplibregl-ctrl-bottom-right,
+  .maplibregl-ctrl-bottom-left {
+    bottom: var(--peek);
+  }
+}
+
+/* Small screens: the legend is one scrolling row across the top of the map
+   instead of a column down its side */
+@media (max-width: 760px) and (orientation: portrait),
+  (max-height: 500px) and (orientation: landscape) {
   .legend-overlay {
     top: 8px;
     left: 8px;
     right: 56px;
     bottom: auto;
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 3px 10px;
-    padding: 6px 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 6px 9px;
+    scrollbar-width: none;
+  }
+  .legend-overlay::-webkit-scrollbar {
+    display: none;
   }
   .legend-title,
   .legend-note {
@@ -604,9 +651,26 @@ main {
   .legend-item {
     font-size: 10.5px;
   }
-  /* keep the attribution above the collapsed sheet */
-  .maplibregl-ctrl-bottom-right,
-  .maplibregl-ctrl-bottom-left {
-    bottom: var(--peek);
+}
+
+/* Phones on their side: too short for a sheet, so a narrower sidebar */
+@media (max-height: 500px) and (orientation: landscape) {
+  main {
+    --sidebar: max(280px, 42%);
+    grid-template-columns: 1fr var(--sidebar);
+  }
+  .legend-overlay {
+    right: auto;
+    width: calc(100% - var(--sidebar) - 64px);
+  }
+  .topbar {
+    padding: 6px 12px;
+  }
+  .sidebar {
+    padding: 12px 14px;
+    gap: 14px;
+  }
+  .hero-value {
+    font-size: 30px;
   }
 }

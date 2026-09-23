@@ -71,7 +71,7 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
         {waiting > 0 && ` · ${waiting} waiting at origin`}
       </p>
       {within !== null && within !== undefined && (
-        <p className="muted small">
+        <p className="muted small hero-agreement">
           Within a minute of the MBTA's own prediction {within}% of the time
           {spread !== null && spread !== undefined && ` (σ ${spread}s)`} over
           the last {windowMinutes} min

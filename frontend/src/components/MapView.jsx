@@ -4,6 +4,13 @@ import { formatDelay, noDelayLabel } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+// Mirrors the phone layout in index.css: the sheet opens over this share of
+// the map when a vehicle is tapped.
+const PHONE = window.matchMedia("(max-width: 760px) and (orientation: portrait)");
+const SHEET_HALF = 0.5;
+// Touch browsers synthesise mouse events on tap, which would leave the hover
+// popup stuck over the marker; the card already shows the same details.
+const HOVER = window.matchMedia("(hover: hover)");
 const BOSTON = { center: [-71.0789, 42.3465], zoom: 11.4 };
 
 // Ease between the last two reported positions rather than snapping. Both ends
@@ -130,14 +137,16 @@ export default function MapView({
 
       m.on("click", "vehicles-icon", (e) => {
         const f = e.features?.[0];
-        if (f) onSelectVehicle?.(f.properties.vehicle_id);
+        if (!f) return;
+        onSelectVehicle?.(f.properties.vehicle_id);
+        keepAboveSheet(m, f.geometry.coordinates, e.point);
       });
       m.on("mouseenter", "vehicles-icon", () => {
         m.getCanvas().style.cursor = "pointer";
       });
       m.on("mousemove", "vehicles-icon", (e) => {
         const f = e.features?.[0];
-        if (!f) return;
+        if (!f || !HOVER.matches) return;
         popup.current
           .setLngLat(f.geometry.coordinates)
           .setDOMContent(tooltip(f.properties))
@@ -249,6 +258,15 @@ function useSourceData(map, ready, sourceId, data) {
     if (ready.current) apply();
     else map.current.once("load", apply);
   }, [map, ready, sourceId, data]);
+}
+
+// Pan a tapped vehicle up into the part of the map the half-open sheet leaves.
+function keepAboveSheet(m, lngLat, point) {
+  if (!PHONE.matches) return;
+  const h = m.getContainer().clientHeight;
+  const visible = h * (1 - SHEET_HALF);
+  if (point.y > 60 && point.y < visible - 24) return;
+  m.easeTo({ center: lngLat, offset: [0, -(h - visible) / 2], duration: 350 });
 }
 
 // DOM, not an HTML string: route names and headsigns come from the feed
