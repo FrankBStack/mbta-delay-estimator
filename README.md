@@ -193,21 +193,25 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 
 ## Known limitations
 
-- Delay computation requires `current_stop_sequence`. Vehicles reporting a
-  position without one appear on the map unfilled, carrying no delay figure.
-- Trips added in realtime (`schedule_relationship: ADDED`) and replacement
-  shuttles have no static schedule to compare against. They are drawn without
-  a delay and the map says which case applies. The Green Line often runs
-  mostly as added trips: on a Saturday evening with a rail diversion, 297 of
-  371 vehicles could be scored and only 2 of 26 light rail vehicles were among
-  them, so the headline median under-represents light rail at those times.
-  Every vehicle running a scheduled trip was placed.
-- Fleet size varies by a factor of three across the service day (231 distinct
-  vehicles overnight against 765 at morning peak), and agreement with the feed
-  is measurably weaker at peak. Any single-window figure should be read against
-  the service level it was sampled from.
-- The feed comparison is null when no prediction falls within five minutes of an
-  observation, rather than reaching for a more distant one. Those rows still
-  carry a computed delay, just nothing to compare it against.
+- Only vehicles on a scheduled trip get a figure. Replacement shuttles and
+  trips the MBTA adds in realtime have no timetable to be late against, and
+  are drawn without one; the map says which case applies. On a normal day
+  that is a few percent of the fleet, mostly shuttles. During a rail
+  diversion the Green Line can run largely as added trips, and the headline
+  median then under-represents light rail.
+- Loop routes lose some in-transit vehicles. `ST_LineLocatePoint` resolves a
+  point to its first match along the line, so on a leg whose stops run
+  backwards along the shape (2.6% of trips) a moving vehicle can't be placed
+  and is left unscored rather than scored against the wrong stop. Stopped
+  vehicles on those trips are unaffected.
+- Between stops, the schedule is prorated evenly along the shape. A bus that
+  crawls through the first half of a leg reads late and then recovers by the
+  next stop. That is inherent to the method and the main reason in-transit
+  observations agree with the feed less closely than stopped ones do.
+- A wrong trip assignment in the feed passes through. A vehicle reporting a
+  trip whose schedule is nowhere near it gets a plausible-looking figure
+  that is simply wrong; only results beyond three hours are flagged low
+  confidence. These were the outliers no estimator change could fix in
+  [docs/validation.md](docs/validation.md).
 - The projection is specific to Massachusetts. Targeting another city means
   changing the SRID, not only the feed URLs.
