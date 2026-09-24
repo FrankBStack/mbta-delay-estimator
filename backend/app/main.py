@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import db
 from .config import CORS_ORIGINS, ENABLE_DOCS, RUN_POLLER
 from .routers import analytics, routes, vehicles
-from .services import realtime
+from .services import realtime, scoring
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,14 +23,18 @@ log = logging.getLogger("tracker")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await db.connect()
+    await db.ensure_realtime_schema()
 
     if not await db.pool().fetchval("SELECT count(*) FROM trip_stop_offset"):
         log.warning("trip_stop_offset is empty - run `python -m app.gtfs_static` "
                     "first or nothing will have a delay")
 
-    poller = None
+    tasks: list[asyncio.Task[None]] = []
     if RUN_POLLER:
-        poller = asyncio.create_task(realtime.run_forever(), name="gtfs-rt-poller")
+        tasks = [
+            asyncio.create_task(realtime.run_forever(), name="gtfs-rt-poller"),
+            asyncio.create_task(scoring.run_forever(), name="arrival-scoring"),
+        ]
         log.info("poller started")
     else:
         log.info("poller disabled; expecting `python -m app.poller` elsewhere")
@@ -38,10 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        if poller is not None:
-            poller.cancel()
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
             with contextlib.suppress(asyncio.CancelledError):
-                await poller
+                await task
         await db.close()
         log.info("shut down")
 

@@ -26,7 +26,7 @@ from ..config import (
     TRIP_UPDATES_URL,
     VEHICLE_POSITIONS_URL,
 )
-from . import delay
+from . import delay, scoring
 
 log = logging.getLogger("tracker.realtime")
 
@@ -172,7 +172,9 @@ async def ingest_trip_updates(
 ) -> int:
     """Insert predictions and derive a delay for each.
 
-    `keep` is the set from wanted_stops(); None stores everything.
+    `keep` is the set from wanted_stops(); None stores everything. Whatever
+    the filter, a prediction whose countdown reads one of the scoring horizons
+    is kept as a sample (scoring.py).
 
     A stop_time_update can carry arrival, departure, both or neither. Each is
     paired with its own scheduled counterpart: delay_s is arrival against
@@ -181,7 +183,9 @@ async def ingest_trip_updates(
     departure_delay_s is departure against scheduled departure.
     """
     feed_ts = _utc(msg.header.timestamp) if msg.header.timestamp else _utc(0)
+    issued = msg.header.timestamp or None
     cols: list[list[Any]] = [[] for _ in range(8)]
+    samples: dict[tuple[Any, ...], tuple[Any, ...]] = {}
 
     for entity in msg.entity:
         if not entity.HasField("trip_update"):
@@ -195,13 +199,22 @@ async def ingest_trip_updates(
         for stu in tu.stop_time_update:
             if not stu.HasField("stop_sequence"):
                 continue
-            if keep is not None and (trip_id, stu.stop_sequence) not in keep:
-                continue
             arrival = stu.arrival.time if stu.HasField("arrival") and stu.arrival.time else None
             departure = (
                 stu.departure.time if stu.HasField("departure") and stu.departure.time else None
             )
             if arrival is None and departure is None:
+                continue
+            if issued and start_date is not None:
+                lead = (arrival or departure) - issued
+                h = scoring.horizon_for(lead)
+                if h is not None:
+                    key = (trip_id, start_date, stu.stop_sequence, h)
+                    prev = samples.get(key)
+                    if prev is None or abs(lead - h) < abs(prev[6] - h):
+                        samples[key] = (trip_id, start_date, stu.stop_sequence, h,
+                                        feed_ts, _utc(arrival or departure), lead)
+            if keep is not None and (trip_id, stu.stop_sequence) not in keep:
                 continue
             for i, value in enumerate([
                 trip_id,
@@ -215,6 +228,7 @@ async def ingest_trip_updates(
             ]):
                 cols[i].append(value)
 
+    await scoring.insert_samples(conn, list(samples.values()))
     if not cols[0]:
         return 0
 

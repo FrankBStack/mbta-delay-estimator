@@ -19,6 +19,7 @@ services:
       # applied once, when the volume is first created, so the API and poller
       # can start before the feed has been loaded
       - ./backend/app/schema.sql:/docker-entrypoint-initdb.d/20_schema.sql:ro
+      - ./backend/app/schema_realtime.sql:/docker-entrypoint-initdb.d/21_schema_realtime.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
       interval: 5s

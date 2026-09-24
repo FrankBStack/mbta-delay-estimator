@@ -11,7 +11,7 @@ import contextlib
 import logging
 
 from . import db
-from .services import realtime
+from .services import realtime, scoring
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,12 +23,13 @@ log = logging.getLogger("tracker.poller")
 
 async def main() -> None:
     await db.connect()
+    await db.ensure_realtime_schema()
     if not await db.pool().fetchval("SELECT count(*) FROM trip_stop_offset"):
         log.warning("trip_stop_offset is empty - run `python -m app.gtfs_static` "
                     "first or nothing will have a delay")
     log.info("poller started")
     try:
-        await realtime.run_forever()
+        await asyncio.gather(realtime.run_forever(), scoring.run_forever())
     finally:
         await db.close()
         log.info("shut down")

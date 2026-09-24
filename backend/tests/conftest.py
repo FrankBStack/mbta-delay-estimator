@@ -6,6 +6,7 @@ import asyncpg
 import pytest
 
 SCHEMA = pathlib.Path(__file__).resolve().parents[1] / "app" / "schema.sql"
+REALTIME_SCHEMA = SCHEMA.with_name("schema_realtime.sql")
 ADMIN_URL = os.getenv("TEST_ADMIN_URL", "postgresql://localhost:5432/postgres")
 TEST_URL = os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/tracker_test")
 TEST_DB = urlsplit(TEST_URL).path.lstrip("/")
@@ -62,6 +63,7 @@ async def db():
 
     conn = await asyncpg.connect(TEST_URL)
     await conn.execute(SCHEMA.read_text())
+    await conn.execute(REALTIME_SCHEMA.read_text())
     await conn.execute(STATIC_SQL)
     yield conn
     await conn.close()
@@ -70,6 +72,7 @@ async def db():
 @pytest.fixture
 async def conn(db):
     await db.execute(
-        "TRUNCATE vehicle_position, trip_update, delay_observation RESTART IDENTITY"
+        "TRUNCATE vehicle_position, trip_update, delay_observation, prediction_sample,"
+        " arrival_score, arrival_score_daily RESTART IDENTITY"
     )
     return db

@@ -271,6 +271,8 @@ async def _health() -> dict[str, Any]:
                  WHERE ts > now() - interval '5 minutes')      AS recent_positions,
                (SELECT count(*) FROM delay_observation
                  WHERE ts > now() - interval '60 minutes')     AS recent_delays,
+               (SELECT count(*) FROM arrival_score
+                 WHERE arrived_at > now() - interval '24 hours') AS arrivals_scored_24h,
                -- the planner's estimate: an exact count scans the whole
                -- table, 12s for 48h of positions on the production box
                (SELECT GREATEST(reltuples, 0)::bigint FROM pg_class

@@ -112,7 +112,7 @@ Interactive documentation at `/docs`.
 flowchart LR
     feeds[("MBTA GTFS-realtime<br/>positions + predictions")] -->|every 15s| poller
     gtfs[("MBTA static GTFS")] -->|weekly| load["load job<br/>gtfs_static, offsets"]
-    poller["poller<br/>ingest, estimate, prune"] --> db[("PostGIS")]
+    poller["poller<br/>ingest, estimate, score, prune"] --> db[("PostGIS")]
     load --> db
     browser["React + MapLibre"] --> caddy["Caddy<br/>TLS"] --> nginx["nginx<br/>static files, /api proxy"] --> api["FastAPI<br/>read-only, cached"] --> db
 ```
@@ -124,13 +124,15 @@ containers so API replicas never double-poll.
 
 ```
 backend/app/
-  schema.sql        tables, indexes, and the gtfs_ts() time helper
+  schema.sql        static tables, indexes, and the gtfs_ts() time helper
+  schema_realtime.sql  positions, predictions, observations, arrival scores
   gtfs_static.py    GTFS zip into PostGIS via streaming COPY
   offsets.py        ST_LineLocatePoint stop-position cache
   backfill.py       recompute observations from stored positions
   services/
     realtime.py     GTFS-realtime poller
     delay.py        the schedule join and comparison
+    scoring.py      both estimates scored against the arrivals that followed
   routers/          vehicles, routes, analytics
 backend/tests/      the estimator run against a synthetic route in PostGIS
 frontend/src/

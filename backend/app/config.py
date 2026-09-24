@@ -38,6 +38,16 @@ BACKFILL_HOURS = _int("BACKFILL_HOURS", 24)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
+# Arrival scoring (app.services.scoring): how often the pass runs, how long an
+# arrival must have settled first, how far back each pass looks, and how long
+# the per-arrival rows and the prediction samples are kept. The daily rollup
+# is kept for good.
+SCORE_INTERVAL_S = _int("SCORE_INTERVAL_S", 3600)
+SCORE_SETTLE_S = _int("SCORE_SETTLE_S", 1800)
+SCORE_LOOKBACK_H = _int("SCORE_LOOKBACK_H", 3)
+SCORE_RETENTION_DAYS = _int("SCORE_RETENTION_DAYS", 60)
+SAMPLE_RETENTION_H = _int("SAMPLE_RETENTION_H", 24)
+
 
 def _bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
