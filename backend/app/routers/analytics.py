@@ -4,9 +4,9 @@ Low-confidence observations are excluded unless you ask for them: those are the
 ones where the vehicle was too far off its shape to place, or where the numbers
 came out implausible enough to suggest the wrong service date.
 
-Vehicles waiting at their origin ahead of departure are excluded from every
-aggregate. They read as exactly zero, which says nothing about lateness and
-drags a fleet median toward "on time".
+Vehicles waiting at, or still heading to, their origin ahead of departure are
+excluded from every aggregate. They read as exactly zero, which says nothing
+about lateness and drags a fleet median toward "on time".
 """
 
 import shutil
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 CONFIDENCE_FILTER = (
     "d.confidence = ANY($2::text[])"
-    " AND NOT (d.method = 'layover' AND d.computed_delay_s = 0)"
+    " AND NOT (d.method IN ('layover', 'first_stop') AND d.computed_delay_s = 0)"
 )
 
 

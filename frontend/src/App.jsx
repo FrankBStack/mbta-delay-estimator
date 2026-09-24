@@ -59,6 +59,7 @@ export default function App() {
   const [routeType, setRouteType] = useState(null);
   const [windowMinutes, setWindowMinutes] = useState(60);
   const [error, setError] = useState(null);
+  const [analyticsError, setAnalyticsError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Held in a ref so the poll effects don't restart on every filter change.
@@ -75,6 +76,9 @@ export default function App() {
     let timer;
     let delay = POLL_STEPS_MS[0];
     let failures = 0;
+    // holding the last good positions only makes sense within one filter;
+    // the first answer for a new filter replaces the old set outright
+    let first = true;
     const tick = async () => {
       let ok = false;
       try {
@@ -82,7 +86,8 @@ export default function App() {
         if (!alive) return;
         const age = secondsAgo(lastHealth.current?.poller?.feed_timestamp);
         const feedStale = age !== null && age > STALE_AFTER_S;
-        setVehicles((prev) => keepLastGood(prev, v, feedStale));
+        setVehicles((prev) => (first ? v : keepLastGood(prev, v, feedStale)));
+        first = false;
         setError(null);
         failures = 0;
         ok = true;
@@ -153,10 +158,11 @@ export default function App() {
         if (!alive) return;
         setDelayRoutes(d.routes);
         setDivergence(dv);
+        setAnalyticsError(null);
         failures = 0;
       } catch (e) {
         failures += 1;
-        if (alive && failures >= ERROR_AFTER_FAILURES) setError(e.message);
+        if (alive && failures >= ERROR_AFTER_FAILURES) setAnalyticsError(e.message);
       } finally {
         if (alive) timer = setTimeout(tick, ANALYTICS_POLL_MS);
       }
@@ -214,7 +220,7 @@ export default function App() {
   const handleHover = useCallback((id) => setHoveredVehicleId(id), []);
 
   const feedAge = secondsAgo(health?.poller?.feed_timestamp);
-  const status = describeStatus({ error, health, feedAgeS: feedAge });
+  const status = describeStatus({ error, analyticsError, health, feedAgeS: feedAge });
   const stale = status.level !== "ok";
   const devHint =
     status.level === "down" && DEV_HOST.test(window.location.hostname)

@@ -63,6 +63,18 @@ describe("describeStatus", () => {
     expect(s.headline).toBe("Positions last updated 4 min ago.");
   });
 
+  it("keeps a failing analytics poll off the outage banner", () => {
+    const s = describeStatus({
+      error: null,
+      analyticsError: "500 Internal Server Error on /api/analytics/divergence",
+      health: {},
+      feedAgeS: 10,
+    });
+    expect(s.level).toBe("stale");
+    expect(s.headline).toBe("Route statistics are not refreshing.");
+    expect(s.detail).toContain("500");
+  });
+
   it("surfaces a poller error and low disk in plain words", () => {
     const s = describeStatus({
       error: null,

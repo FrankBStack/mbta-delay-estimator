@@ -21,10 +21,11 @@ export function median(values) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-// A vehicle waiting at its origin ahead of departure reads as exactly zero,
-// which says nothing about how late the fleet is, so it's counted separately.
+// A vehicle waiting at, or still heading to, its origin ahead of departure
+// reads as exactly zero, which says nothing about how late the fleet is, so
+// it's counted separately. Mirrors CONFIDENCE_FILTER in the analytics router.
 export function isWaiting(p) {
-  return p.method === "layover" && p.computed_delay_s === 0;
+  return (p.method === "layover" || p.method === "first_stop") && p.computed_delay_s === 0;
 }
 
 export function splitDelays(features) {
@@ -33,6 +34,8 @@ export function splitDelays(features) {
   for (const f of features) {
     const p = f.properties;
     if (p.computed_delay_s === null || p.computed_delay_s === undefined) continue;
+    // the analytics leave these out too: off the shape, or implausibly late
+    if (p.confidence === "low") continue;
     if (isWaiting(p)) waiting += 1;
     else delays.push(p.computed_delay_s);
   }

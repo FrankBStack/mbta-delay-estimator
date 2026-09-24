@@ -62,6 +62,25 @@ describe("splitDelays", () => {
     expect(waiting).toBe(0);
   });
 
+  it("counts a vehicle still heading to its first stop ahead of time as waiting", () => {
+    const { delays, waiting } = splitDelays([
+      feature({ method: "first_stop", computed_delay_s: 0 }),
+      feature({ method: "first_stop", computed_delay_s: 120 }),
+    ]);
+    expect(delays).toEqual([120]);
+    expect(waiting).toBe(1);
+  });
+
+  it("leaves out low-confidence figures, as the analytics do", () => {
+    const { delays, waiting } = splitDelays([
+      feature({ method: "interpolated", computed_delay_s: 1296, confidence: "low" }),
+      feature({ method: "layover", computed_delay_s: 0, confidence: "low" }),
+      feature({ method: "interpolated", computed_delay_s: 40, confidence: "high" }),
+    ]);
+    expect(delays).toEqual([40]);
+    expect(waiting).toBe(0);
+  });
+
   it("drops vehicles with no figure", () => {
     const { delays, waiting } = splitDelays([
       feature({ method: null, computed_delay_s: null }),

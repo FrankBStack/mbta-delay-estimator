@@ -29,7 +29,7 @@ export function keepLastGood(prev, next, stale) {
 
 // level: ok | stale | down. `headline` is written for a visitor; `detail` is
 // the raw message for whoever is debugging.
-export function describeStatus({ error, health, feedAgeS }) {
+export function describeStatus({ error, analyticsError, health, feedAgeS }) {
   if (error) {
     return {
       level: "down",
@@ -50,6 +50,11 @@ export function describeStatus({ error, health, feedAgeS }) {
   if (poller?.last_error) {
     notes.push("The server reported a problem storing data.");
     details.push(poller.last_error);
+  }
+  // the map is still live; only the route figures are behind
+  if (analyticsError) {
+    notes.push("Route statistics are not refreshing.");
+    details.push(analyticsError);
   }
   if (disk?.total_bytes && disk.free_bytes / disk.total_bytes < LOW_DISK_FRACTION) {
     notes.push("The server is low on disk space.");
