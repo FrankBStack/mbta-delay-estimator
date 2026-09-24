@@ -64,7 +64,7 @@ async def _delay_by_route(
                round(avg(d.divergence_s) FILTER (WHERE d.divergence_s IS NOT NULL))::int
                                                                AS mean_divergence_s,
                count(*) FILTER (WHERE d.divergence_s IS NOT NULL) AS compared,
-               round(100.0 * count(*) FILTER (WHERE d.computed_delay_s > 300)
+               round(100.0 * count(*) FILTER (WHERE d.computed_delay_s >= 300)
                      / count(*))::int                          AS pct_over_5min
         FROM delay_observation d
         JOIN route r ON r.route_id = d.route_id

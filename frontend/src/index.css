@@ -618,6 +618,11 @@ main {
     width: 38px;
     height: 38px;
   }
+  /* below the chart, not over its top rows */
+  .hovercard {
+    position: static;
+    margin-top: 8px;
+  }
   /* keep the attribution above the collapsed sheet */
   .maplibregl-ctrl-bottom-right,
   .maplibregl-ctrl-bottom-left {

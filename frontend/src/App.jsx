@@ -205,6 +205,12 @@ export default function App() {
     }
   }, []);
 
+  // the selected vehicle can age out of the feed or fall outside a new
+  // filter; drop it rather than hold an empty card open
+  useEffect(() => {
+    if (vehicles && selectedVehicleId && !selected) handleSelect(null);
+  }, [vehicles, selectedVehicleId, selected, handleSelect]);
+
   // swipe up opens the sheet; swipe down from the top of its content closes it
   const onTouchStart = (e) => {
     touch.current = { y: e.touches[0].clientY, top: sidebar.current?.scrollTop ?? 0 };

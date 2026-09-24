@@ -31,9 +31,12 @@ def _evict(now: float) -> None:
     for key in [k for k, (expires, _) in _entries.items() if expires <= now]:
         del _entries[key]
     # route_id reaches this from the query string, so the key space is caller
-    # controlled and needs a hard ceiling, not just expiry
-    if len(_entries) > CACHE_MAX_ENTRIES:
-        _entries.clear()
+    # controlled and needs a hard ceiling, not just expiry. Oldest out first:
+    # clearing everything would let a scanner flush the hot keys every pass
+    excess = len(_entries) - CACHE_MAX_ENTRIES
+    if excess > 0:
+        for key in sorted(_entries, key=lambda k: _entries[k][0])[:excess]:
+            del _entries[key]
 
 
 async def get_or_set(
@@ -61,8 +64,8 @@ async def get_or_set(
             if hit and hit[0] > now:
                 return hit[1]
             value = await producer()
-            _evict(now)
             _entries[key] = (time.monotonic() + ttl, value)
+            _evict(now)
             return value
     finally:
         kl.users -= 1

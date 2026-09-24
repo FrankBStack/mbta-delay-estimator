@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  DELAY_BUCKETS,
-  METHOD_LABELS,
-  UNKNOWN_COLOR,
-  delayBucket,
-  delayBucketExpression,
-  delayColor,
-  delayColorExpression,
-  formatDelay,
-  formatSigned,
-  noDelayLabel,
-  secondsAgo,
-} from "./delay.js";
+import { DELAY_BUCKETS, METHOD_LABELS, UNKNOWN_COLOR, delayBucket, delayBucketExpression, delayColor, delayColorExpression, formatClock, formatDelay, formatSigned, noDelayLabel, secondsAgo } from "./delay.js";
 
 // Walk the MapLibre `step` expression the way the renderer does, so the test
 // exercises the encoding rather than re-deriving the bucket from the array.
@@ -182,5 +170,16 @@ describe("noDelayLabel", () => {
     expect(noDelayLabel(null)).toBe("No timetable");
     expect(noDelayLabel(undefined)).toBe("No timetable");
     expect(noDelayLabel("something-new")).toBe("No timetable");
+  });
+});
+
+describe("formatClock", () => {
+  it("shows Boston's clock whatever zone the visitor is in", () => {
+    // 22:16:56 UTC on 23 Sep 2026 is 6:16:56 PM in Boston
+    expect(formatClock("2026-09-23T22:16:56+00:00")).toMatch(/6:16:56/);
+  });
+
+  it("is a dash with no time", () => {
+    expect(formatClock(null)).toBe("—");
   });
 });

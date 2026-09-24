@@ -54,3 +54,15 @@ async def test_expired_entry_is_recomputed():
     assert await cache.get_or_set(("e",), producer, ttl_s=0.01) == 1
     await asyncio.sleep(0.02)
     assert await cache.get_or_set(("e",), producer, ttl_s=0.01) == 2
+
+
+async def test_ceiling_drops_the_oldest_entries_not_all_of_them(monkeypatch):
+    cache.clear()
+    monkeypatch.setattr(cache, "CACHE_MAX_ENTRIES", 2)
+
+    async def produce(k):
+        return k
+
+    for k in ("a", "b", "c"):
+        await cache.get_or_set((k,), lambda k=k: produce(k), ttl_s=5)
+    assert set(cache._entries) == {("b",), ("c",)}

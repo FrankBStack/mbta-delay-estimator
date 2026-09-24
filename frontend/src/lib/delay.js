@@ -60,12 +60,16 @@ export function formatSigned(seconds) {
   return `${s > 0 ? "+" : s < 0 ? "−" : ""}${Math.abs(s)}s`;
 }
 
+// Boston's clock, whatever zone the visitor is in
+export const AGENCY_TZ = "America/New_York";
+
 export function formatClock(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    timeZone: AGENCY_TZ,
   });
 }
 

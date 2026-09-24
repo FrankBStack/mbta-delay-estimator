@@ -58,7 +58,8 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
   }
 
   const typical = Math.round(median(delays));
-  const late = delays.filter((d) => d > 300).length;
+  // >= to match the colour scale, which turns red at five minutes
+  const late = delays.filter((d) => d >= 300).length;
   const within = divergence?.pct_within_60s;
   const spread = divergence?.stddev_divergence_s;
 

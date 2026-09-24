@@ -9,16 +9,19 @@
 #   curl -fsSL https://get.docker.com | sh
 #   git clone https://github.com/FrankBStack/mbta-delay-estimator.git /opt/tracker && cd /opt/tracker
 #   cp .env.example .env    # set POSTGRES_PASSWORD and DOMAIN; COMPOSE_FILE is preset there
-#   docker compose pull && docker compose up -d
+#   docker compose build && docker compose up -d
 #   docker compose run --rm load
 #
-# Weekly feed reload, in root's crontab:
+# Weekly feed reload, in the deploying user's crontab:
 #
 #   0 4 * * 1 cd /opt/tracker && docker compose run --rm load
 #
-# Updating after CI has pushed new images:
+# Updating:
 #
-#   cd /opt/tracker && git pull && docker compose pull && docker compose up -d
+#   cd /opt/tracker && git pull && docker compose build && docker compose up -d
+#
+# Build rather than pull: CI publishes amd64 images only, and an arm64 host
+# (Oracle's Ampere free tier) has no matching manifest to pull.
 
 x-prod-env: &prod-env
   DATABASE_URL: postgresql://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker

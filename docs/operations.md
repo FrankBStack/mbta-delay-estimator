@@ -41,6 +41,16 @@ and poller start before the feed has been loaded. nginx serves the built
 frontend and proxies `/api` to the API container on the same origin, so no
 CORS configuration is needed.
 
+CI publishes amd64 images only. On an arm64 host, `docker compose build`
+before `up -d` rather than `pull`.
+
+A code deploy does not touch the schema. `schema.sql` runs again only on a
+feed reload, so a change to one of the realtime tables (the `IF NOT EXISTS`
+statements at its end) has to be applied by hand with `psql` in the db
+container, or by running the reload, before starting code that depends on it.
+Running the whole file by hand is not an option: it drops and rebuilds the
+static tables.
+
 ## Caching
 
 Read endpoints are cached for `CACHE_TTL_S`, so a response can trail the poller
