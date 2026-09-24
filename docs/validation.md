@@ -23,9 +23,10 @@ arrival event and holds it, rather than measuring against the clock. The
 mean divergence was mostly this: recomputing the same observations against
 predicted arrival gave +34s, against predicted departure −17s, for both the
 `stopped_at` and `interpolated` classes, which is what you get from comparing a
-during-dwell clock reading against an at-arrival figure. Idle layovers (method
-`layover`, delay 0) are now excluded from all aggregates, and `first_stop` is
-floored at zero like `layover`, which the −127s in the peak table called for.
+during-dwell clock reading against an at-arrival figure. `first_stop` is now
+floored at zero like `layover`, which the −127s in the peak table called for,
+and idle vehicles ahead of their origin (either method, delay 0) are excluded
+from all aggregates.
 The effect of the dwell hold and its cap, measured on identical observations,
 is in the next section.
 

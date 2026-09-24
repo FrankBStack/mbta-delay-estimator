@@ -49,16 +49,18 @@ the 60 that clock scoring produces, and every gain of the hold stayed.
 
 ## Idle layovers
 
-A vehicle waiting at its origin ahead of departure reads as exactly zero. That
-says nothing about lateness, so the headline median and the analytics leave
-those out and the headline counts them separately.
+A vehicle waiting at its origin ahead of departure, or still on its way there,
+reads as exactly zero (`layover` and `first_stop` are both floored). That says
+nothing about lateness, so the headline median and the analytics leave those
+out and the headline counts them separately.
 
 ## Confidence
 
 Observations are marked low confidence where the vehicle sits more than 150m
 (`MAX_SNAP_ERROR_M`) from the shape it reports running, or where the result
 exceeds three hours, typically indicating a mismatched service date. These are
-retained but excluded from analytics by default. In-transit observations whose
+retained, and shown on the map, but excluded from the analytics and from the
+headline median and late count. In-transit observations whose
 interpolation ratio falls outside the leg are marked medium, as are
 `first_stop` placements.
 
