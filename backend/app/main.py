@@ -17,6 +17,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-7s %(name)s  %(message)s",
     datefmt="%H:%M:%S",
 )
+# two lines per poll for the feed fetches alone; the poll summary already says
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("tracker")
 
 

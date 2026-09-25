@@ -98,6 +98,20 @@ WHERE a.arrived_at > now() - interval '7 days'
 GROUP BY 1 ORDER BY 1;
 ```
 
+## Disk
+
+The database is bounded by retention: positions and observations for
+`RETENTION_HOURS`, predictions for `BACKFILL_HOURS`, samples for
+`SAMPLE_RETENTION_H`, per-arrival scores for `SCORE_RETENTION_DAYS`. Only
+the daily rollup grows without limit, at about a megabyte a day.
+`/api/analytics/health` reports the size of each realtime table under
+`storage`, and the page warns when the disk is under a tenth free.
+
+What is not bounded is Docker. Each build leaves layers in the build cache,
+so run `docker builder prune -f` after a deploy. Container logs are capped
+in compose at three 20 MB files per service, except the database, which is
+left on the default so a compose change there never restarts Postgres.
+
 ## Caching
 
 Read endpoints are cached for `CACHE_TTL_S`, so a response can trail the poller

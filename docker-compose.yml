@@ -1,4 +1,15 @@
+# Docker keeps container logs forever by default; the poller alone writes
+# megabytes a day. db is left on the default so a change here never restarts
+# Postgres; its log is quiet anyway.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+
 x-backend: &backend
+  <<: *logging
   image: ghcr.io/frankbstack/mbta-delay-estimator/api:main
   build: ./backend
   environment: &backend-env
@@ -44,6 +55,7 @@ services:
     restart: unless-stopped
 
   web:
+    <<: *logging
     image: ghcr.io/frankbstack/mbta-delay-estimator/web:main
     build: ./frontend
     ports:

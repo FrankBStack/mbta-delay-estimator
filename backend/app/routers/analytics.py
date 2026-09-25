@@ -283,6 +283,19 @@ async def _health() -> dict[str, Any]:
                (SELECT value FROM feed_meta WHERE key = 'feed_end_date') AS gtfs_end_date
         """
     )
+    # catalog lookups, not scans: cheap enough to poll
+    sizes = await db.pool().fetch(
+        """
+        SELECT relname, pg_total_relation_size(oid) AS bytes
+        FROM pg_class
+        WHERE relkind = 'r' AND relname IN
+              ('vehicle_position', 'delay_observation', 'trip_update',
+               'prediction_sample', 'arrival_score', 'arrival_score_daily')
+        ORDER BY relname
+        """
+    )
+    database_bytes = await db.pool().fetchval("SELECT pg_database_size(current_database())")
+
     # from the database, so this reports the real poller whether it runs in
     # this process or its own
     async with db.pool().acquire() as conn:
@@ -296,4 +309,8 @@ async def _health() -> dict[str, Any]:
         "poller": poller or realtime.snapshot(),
         "data": dict(counts) if counts else {},
         "disk": {"free_bytes": disk.free, "total_bytes": disk.total},
+        "storage": {
+            "database_bytes": database_bytes,
+            "tables": {r["relname"]: r["bytes"] for r in sizes},
+        },
     }

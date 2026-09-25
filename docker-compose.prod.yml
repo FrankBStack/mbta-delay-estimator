@@ -19,6 +19,7 @@
 # Updating:
 #
 #   cd /opt/tracker && git pull && docker compose build && docker compose up -d
+#   docker builder prune -f    # each build leaves layers behind; a year of them fills the disk
 #
 # Build rather than pull: CI publishes amd64 images only, and an arm64 host
 # (Oracle's Ampere free tier) has no matching manifest to pull.
@@ -48,6 +49,12 @@ services:
       <<: *prod-env
 
   caddy:
+    # the base file's log cap, repeated: anchors don't cross files
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     image: caddy:2-alpine
     ports:
       - "80:80"
