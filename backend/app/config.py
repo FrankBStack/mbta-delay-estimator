@@ -53,8 +53,6 @@ def _bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
-# Off when the poller runs as its own process (`python -m app.poller`); leaving
-# it on in more than one API replica means N pollers double-writing.
 RUN_POLLER = _bool("RUN_POLLER", True)
 
 ENABLE_DOCS = _bool("ENABLE_DOCS", True)

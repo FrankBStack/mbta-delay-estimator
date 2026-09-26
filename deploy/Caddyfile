@@ -1,8 +1,6 @@
 {$DOMAIN} {
     encode gzip
 
-    # access log to stdout, so `docker compose logs caddy` shows every request
-    # with its status, not only errors
     log {
         output stdout
     }

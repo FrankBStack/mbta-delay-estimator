@@ -130,7 +130,7 @@ ANALYTICS_TTL_S = 30
 # A hash aggregate over the window, then a PK join back: far cheaper than a
 # DISTINCT ON sort of every row in the window. The join side repeats the time
 # bound so the planner reads the window through the ts index instead of
-# hashing the whole table; that alone halves the query on a small box.
+# hashing the whole table.
 THINNED = f"""
     SELECT d.*
     FROM (
@@ -273,8 +273,7 @@ async def _health() -> dict[str, Any]:
                  WHERE ts > now() - interval '60 minutes')     AS recent_delays,
                (SELECT count(*) FROM arrival_score
                  WHERE arrived_at > now() - interval '24 hours') AS arrivals_scored_24h,
-               -- the planner's estimate: an exact count scans the whole
-               -- table, 12s for 48h of positions on the production box
+               -- planner's estimate: an exact count scans the whole table
                (SELECT GREATEST(reltuples, 0)::bigint FROM pg_class
                  WHERE oid = 'vehicle_position'::regclass)     AS total_positions,
                (SELECT count(*) FROM trip)                     AS trips,

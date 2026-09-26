@@ -150,8 +150,7 @@ def wanted_stops(vehicles_msg: gtfs_rt.FeedMessage) -> set[tuple[str, int]]:
     a row once the vehicle advances before the next poll.
 
     The feed carries every remaining stop of every trip, about 18k rows a
-    poll, and observations only ever join the one they're at. Storing the
-    rest filled 8 GB in twelve hours on the production box.
+    poll, and observations only ever join the one they're at.
     """
     keep: set[tuple[str, int]] = set()
     for entity in vehicles_msg.entity:
@@ -310,7 +309,7 @@ PRUNE_BATCH = 20_000
 async def prune(conn: asyncpg.Connection) -> dict[str, int]:
     """Delete expired rows in batches, each its own transaction. One DELETE of
     an hour's worth of rows holds locks and floods the WAL long enough to
-    stall the API on a one-core box."""
+    stall the API."""
     deleted: dict[str, int] = {}
     for table, hours in RETENTION.items():
         total = 0

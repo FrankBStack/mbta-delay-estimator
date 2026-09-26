@@ -1,28 +1,8 @@
 # Production overlay. Adds Caddy for TLS, takes the password and domain from
 # .env, and trims memory for a 2 GB box.
 #
-# First time on a fresh Ubuntu server, after pointing the domain's A record at
-# it (Caddy requests the certificate on start):
-#
-#   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-#   echo '/swapfile none swap sw 0 0' >> /etc/fstab
-#   curl -fsSL https://get.docker.com | sh
-#   git clone https://github.com/FrankBStack/mbta-delay-estimator.git /opt/tracker && cd /opt/tracker
-#   cp .env.example .env    # set POSTGRES_PASSWORD and DOMAIN; COMPOSE_FILE is preset there
-#   docker compose build && docker compose up -d
-#   docker compose run --rm load
-#
-# Weekly feed reload, in the deploying user's crontab:
-#
-#   0 4 * * 1 cd /opt/tracker && docker compose run --rm load
-#
-# Updating:
-#
-#   cd /opt/tracker && git pull && docker compose build && docker compose up -d
-#   docker builder prune -f    # each build leaves layers behind; a year of them fills the disk
-#
 # Build rather than pull: CI publishes amd64 images only, and an arm64 host
-# (Oracle's Ampere free tier) has no matching manifest to pull.
+# has no matching manifest to pull.
 
 x-prod-env: &prod-env
   DATABASE_URL: postgresql://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker

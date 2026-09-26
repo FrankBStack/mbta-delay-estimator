@@ -59,8 +59,7 @@ app = FastAPI(
                 "the static schedule and compared to the agency's predictions.",
     version="1.0.0",
     lifespan=lifespan,
-    # an API should 404 a wrong path, not redirect; a redirect built behind a
-    # proxy came out as http:// and browsers cached it
+    # an API should 404 a wrong path, not redirect
     redirect_slashes=False,
     docs_url="/docs" if ENABLE_DOCS else None,
     redoc_url="/redoc" if ENABLE_DOCS else None,

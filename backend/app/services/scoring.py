@@ -5,11 +5,11 @@ the one implied by where the vehicle is against its timetable (delay.py).
 Neither can judge the other. The vehicle's first STOPPED_AT report at the stop
 can judge both.
 
-Storing every prediction for every stop is what filled the disk once, so the
-ingest keeps a prediction only at the moments its countdown reads one of
-HORIZONS_S: "when the sign said five minutes". The hourly pass then takes the
-arrivals that have settled, pairs each sample with the position-derived figure
-the estimator held at the same moment, and writes one row per arrival.
+Every prediction for every stop is too much to store, so the ingest keeps a
+prediction only at the moments its countdown reads one of HORIZONS_S: "when
+the sign said five minutes". The hourly pass then takes the arrivals that have
+settled, pairs each sample with the position-derived figure the estimator held
+at the same moment, and writes one row per arrival.
 
     python -m app.services.scoring --hours 20   # catch up by hand
 """
