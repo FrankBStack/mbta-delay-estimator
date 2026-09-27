@@ -1,5 +1,5 @@
 {
-  "name": "transit-tracker-frontend",
+  "name": "mbta-delay-estimator-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",

@@ -239,7 +239,7 @@ export default function App() {
         <div className="brand">
           <span className="dot" data-stale={stale} />
           <div>
-            <h1>MBTA Live Tracker</h1>
+            <h1>MBTA Delay Estimator</h1>
             <p className="muted small">
               {vehicles?.features.length ?? 0} vehicles ·{" "}
               {health?.poller?.feed_timestamp

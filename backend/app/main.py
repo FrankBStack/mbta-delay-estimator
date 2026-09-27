@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Transit Tracker",
+    title="MBTA Delay Estimator",
     description="Live MBTA vehicles, with delays computed from position against "
                 "the static schedule and compared to the agency's predictions.",
     version="1.0.0",
@@ -80,7 +80,7 @@ app.include_router(analytics.router)
 
 @app.get("/")
 async def root() -> dict[str, str | None]:
-    return {"service": "transit-tracker", "docs": "/docs" if ENABLE_DOCS else None}
+    return {"service": "mbta-delay-estimator", "docs": "/docs" if ENABLE_DOCS else None}
 
 
 @app.get("/healthz")
