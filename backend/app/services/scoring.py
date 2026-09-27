@@ -134,18 +134,25 @@ scheduled AS (
     WHERE o.arrival_s IS NOT NULL
       -- the origin is a departure, not an arrival
       AND a.seq > (SELECT min(stop_sequence) FROM trip_stop_offset WHERE trip_id = a.trip_id)
-),
--- each sampled reading, with the estimator's figure from the same moment
-samples AS (
-    SELECT s.vehicle_id, s.trip_id, s.start_date, s.seq, ps.horizon_s,
+)
+INSERT INTO arrival_score
+    (vehicle_id, trip_id, route_id, direction_id, start_date, stop_sequence,
+     stop_id, scheduled_time, arrived_at, {_SCORE_COLS})
+SELECT s.vehicle_id, s.trip_id, s.route_id, s.direction_id, s.start_date, s.seq,
+       s.stop_id, s.scheduled_time, s.arrived_at,
+       {_SCORE_PIVOT}
+FROM scheduled s
+-- each sampled reading, with the estimator's figure from the same moment.
+-- Lateral on s rather than a samples CTE joined back to it: the planner puts
+-- scheduled at one row, and a self-join on that estimate re-derives every
+-- sample once per arrival
+LEFT JOIN LATERAL (
+    SELECT ps.horizon_s,
            round(extract(epoch FROM ps.predicted_time - s.arrived_at))::int AS feed_error_s,
            CASE WHEN d.computed_delay_s IS NULL THEN NULL
                 ELSE round(extract(epoch FROM s.scheduled_time - s.arrived_at))::int
                      + d.computed_delay_s END AS position_error_s
-    FROM scheduled s
-    JOIN prediction_sample ps
-      ON ps.trip_id = s.trip_id AND ps.start_date = s.start_date
-     AND ps.stop_sequence = s.seq AND ps.ts < s.arrived_at
+    FROM prediction_sample ps
     LEFT JOIN LATERAL (
         SELECT d.computed_delay_s
         FROM delay_observation d
@@ -156,17 +163,9 @@ samples AS (
         ORDER BY abs(extract(epoch FROM d.ts - ps.ts))
         LIMIT 1
     ) d ON true
-)
-INSERT INTO arrival_score
-    (vehicle_id, trip_id, route_id, direction_id, start_date, stop_sequence,
-     stop_id, scheduled_time, arrived_at, {_SCORE_COLS})
-SELECT s.vehicle_id, s.trip_id, s.route_id, s.direction_id, s.start_date, s.seq,
-       s.stop_id, s.scheduled_time, s.arrived_at,
-       {_SCORE_PIVOT}
-FROM scheduled s
-LEFT JOIN samples smp
-       ON smp.vehicle_id = s.vehicle_id AND smp.trip_id = s.trip_id
-      AND smp.start_date = s.start_date AND smp.seq = s.seq
+    WHERE ps.trip_id = s.trip_id AND ps.start_date = s.start_date
+      AND ps.stop_sequence = s.seq AND ps.ts < s.arrived_at
+) smp ON true
 GROUP BY s.vehicle_id, s.trip_id, s.route_id, s.direction_id, s.start_date, s.seq,
          s.stop_id, s.scheduled_time, s.arrived_at
 ON CONFLICT (vehicle_id, trip_id, start_date, stop_sequence) DO NOTHING
