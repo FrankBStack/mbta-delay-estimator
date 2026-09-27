@@ -51,6 +51,10 @@ export function describeStatus({ error, analyticsError, health, feedAgeS }) {
     notes.push("The server reported a problem storing data.");
     details.push(poller.last_error);
   }
+  if (poller?.last_score_error) {
+    notes.push("Arrival scoring has fallen behind.");
+    details.push(poller.last_score_error);
+  }
   // the map is still live; only the route figures are behind
   if (analyticsError) {
     notes.push("Route statistics are not refreshing.");

@@ -351,6 +351,8 @@ def snapshot() -> dict[str, Any]:
         "last_prune_error": STATE["last_prune_error"],
         "trip_match_rate": STATE["trip_match_rate"],
         "static_feed_end_date": STATE["static_feed_end_date"],
+        "last_score": iso(scoring.STATE["last_score"]),
+        "last_score_error": scoring.STATE["last_score_error"],
     }
 
 

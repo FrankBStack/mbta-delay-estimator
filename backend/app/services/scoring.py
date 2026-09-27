@@ -31,9 +31,13 @@ from ..config import (
     SCORE_LOOKBACK_H,
     SCORE_RETENTION_DAYS,
     SCORE_SETTLE_S,
+    SCORE_TIMEOUT_S,
 )
 
 log = logging.getLogger("tracker.scoring")
+
+# read by realtime.snapshot(), so the heartbeat and /health carry it
+STATE: dict[str, Any] = {"last_score": None, "last_score_error": None}
 
 # countdown readings to sample, in seconds; the arrival_score columns mirror it
 HORIZONS_S = (60, 120, 300, 600, 900, 1200)
@@ -171,8 +175,12 @@ RETURNING 1
 
 
 async def score(conn: asyncpg.Connection, since: dt.datetime, until: dt.datetime) -> int:
-    """Write a row for every not-yet-scored arrival in [since, until)."""
-    rows = await conn.fetch(SCORE_SQL, since, until, AGENCY_TZ)
+    """Write a row for every not-yet-scored arrival in [since, until). A pass
+    that runs past SCORE_TIMEOUT_S is abandoned and retried next time: one that
+    runs for hours holds back vacuum and blocks any restart."""
+    async with conn.transaction():
+        await conn.execute(f"SET LOCAL statement_timeout = {int(SCORE_TIMEOUT_S * 1000)}")
+        rows = await conn.fetch(SCORE_SQL, since, until, AGENCY_TZ)
     return len(rows)
 
 
@@ -230,7 +238,7 @@ def service_days(since: dt.datetime, until: dt.datetime) -> list[dt.date]:
     tz = ZoneInfo(AGENCY_TZ)
     first = since.astimezone(tz).date()
     last = (until - dt.timedelta(seconds=1)).astimezone(tz).date()
-    return sorted({first, last})
+    return [first + dt.timedelta(days=i) for i in range((last - first).days + 1)]
 
 
 async def run_once(
@@ -239,7 +247,9 @@ async def run_once(
     lookback_h: float = SCORE_LOOKBACK_H,
     settle_s: int = SCORE_SETTLE_S,
 ) -> dict[str, Any]:
-    """Score what has settled, roll up the days it touched, prune."""
+    """Prune, then score what has settled and roll up the days it touched.
+    Pruning goes first so a scoring pass that fails cannot stall it."""
+    pruned = await prune(conn)
     until = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=settle_s)
     since = until - dt.timedelta(hours=lookback_h)
     # an arrival is only scorable once every reading for it could have been
@@ -250,13 +260,12 @@ async def run_once(
         str(max(HORIZONS_S)),
     )
     if floor is None:
-        return {"scored": 0, "days": [], "pruned": await prune(conn)}
+        return {"scored": 0, "days": [], "pruned": pruned}
     since = max(since, floor)
     scored = await score(conn, since, until) if since < until else 0
     days = service_days(since, until)
     for day in days:
         await aggregate(conn, day)
-    pruned = await prune(conn)
     return {"scored": scored, "days": [d.isoformat() for d in days], "pruned": pruned}
 
 
@@ -265,6 +274,8 @@ async def run_forever() -> None:
         try:
             async with db.pool().acquire() as conn:
                 r = await run_once(conn)
+            STATE["last_score"] = dt.datetime.now(dt.UTC)
+            STATE["last_score_error"] = None
             log.info(
                 "scored %d arrivals, rolled up %s, pruned %d samples",
                 r["scored"], ", ".join(r["days"]), r["pruned"]["prediction_sample"],
@@ -272,7 +283,8 @@ async def run_forever() -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log.error("scoring failed: %s: %s", type(exc).__name__, exc)
+            STATE["last_score_error"] = f"{type(exc).__name__}: {exc}"
+            log.error("scoring failed: %s", STATE["last_score_error"])
         await asyncio.sleep(SCORE_INTERVAL_S)
 
 

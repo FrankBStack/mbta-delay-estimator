@@ -74,8 +74,12 @@ Retention: per-arrival rows for `SCORE_RETENTION_DAYS` (default 60, roughly
 45 MB a day on the MBTA), samples for `SAMPLE_RETENTION_H` (default 24), the
 rollup indefinitely. Each pass looks back `SCORE_LOOKBACK_H` hours (default
 3) and skips arrivals already scored, so a restart loses nothing inside that
-window. To catch up after a longer gap, within what the 48-hour position
-retention still holds:
+window. A pass that runs past `SCORE_TIMEOUT_S` (default 600) is abandoned and
+retried next hour, and pruning runs before scoring, so a failing pass cannot
+stall it. `/api/analytics/health` reports the last successful pass and the
+last error under `poller`, and the page banner says when scoring is failing.
+To catch up after a longer gap, within what the 48-hour position retention
+still holds:
 
 ```bash
 python -m app.services.scoring --hours 20

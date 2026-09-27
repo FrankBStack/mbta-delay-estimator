@@ -1,5 +1,10 @@
 """Scoring both arrival estimates against the arrival that followed."""
 
+import datetime as dt
+
+import asyncpg
+import pytest
+
 from app.services import realtime, scoring
 from tests.test_delay import SERVICE_DATE, at, observe
 from tests.test_realtime import updates_msg
@@ -84,3 +89,27 @@ async def test_a_dwell_that_began_before_the_window_is_not_rescored(conn):
     # take it for the arrival
     assert await scoring.score(conn, at(18380), at(19000)) == 0
     assert await scoring.score(conn, at(18000), at(19000)) == 1
+
+
+def test_service_days_covers_every_day_in_the_window():
+    since = dt.datetime(2026, 9, 26, 0, 42, tzinfo=dt.UTC)  # 25 Sep, 20:42 in Boston
+    until = dt.datetime(2026, 9, 27, 21, 0, tzinfo=dt.UTC)
+    assert scoring.service_days(since, until) == [
+        dt.date(2026, 9, 25), dt.date(2026, 9, 26), dt.date(2026, 9, 27)
+    ]
+
+
+async def test_a_pass_that_runs_too_long_is_abandoned_after_pruning(conn, monkeypatch):
+    monkeypatch.setattr(scoring, "SCORE_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(  # the real pass finishes in under a millisecond here
+        scoring, "SCORE_SQL",
+        "SELECT pg_sleep(1) FROM (SELECT $1::timestamptz, $2::timestamptz, $3::text) p",
+    )
+    now = dt.datetime.now(dt.UTC)
+    old, fresh = now - dt.timedelta(days=3), now - dt.timedelta(hours=2)
+    await sample(conn, 1, 300, old, old + dt.timedelta(seconds=300))
+    await sample(conn, 2, 300, fresh, fresh + dt.timedelta(seconds=300))
+
+    with pytest.raises(asyncpg.QueryCanceledError):
+        await scoring.run_once(conn)
+    assert await conn.fetchval("SELECT count(*) FROM prediction_sample") == 1

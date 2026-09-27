@@ -90,4 +90,17 @@ describe("describeStatus", () => {
     expect(s.detail).toContain("DiskFull");
     expect(s.detail).toContain("1 GB free of 30 GB");
   });
+
+  it("says when arrival scoring is failing", () => {
+    const s = describeStatus({
+      error: null,
+      feedAgeS: 10,
+      health: {
+        poller: { last_score_error: "QueryCanceledError: canceling statement due to statement timeout" },
+      },
+    });
+    expect(s.level).toBe("stale");
+    expect(s.headline).toBe("Arrival scoring has fallen behind.");
+    expect(s.detail).toContain("statement timeout");
+  });
 });
