@@ -1,8 +1,5 @@
 # Production overlay. Adds Caddy for TLS, takes the password and domain from
 # .env, and trims memory for a 2 GB box.
-#
-# Build rather than pull: CI publishes amd64 images only, and an arm64 host
-# has no matching manifest to pull.
 
 x-prod-env: &prod-env
   DATABASE_URL: postgresql://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker

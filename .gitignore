@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 backend/.cache/
+backups/
 node_modules/
 dist/
 .DS_Store

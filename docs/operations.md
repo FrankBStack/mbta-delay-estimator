@@ -41,8 +41,8 @@ and poller start before the feed has been loaded. nginx serves the built
 frontend and proxies `/api` to the API container on the same origin, so no
 CORS configuration is needed.
 
-CI publishes amd64 images only. On an arm64 host, `docker compose build`
-before `up -d` rather than `pull`.
+CI publishes amd64 and arm64 images on every push to main, so a deploy is
+`docker compose pull && docker compose up -d`; `build` is for local changes.
 
 The schema is in two files. `schema.sql` holds the static tables and runs on
 a feed reload, dropping and rebuilding them. `schema_realtime.sql` holds the
@@ -107,10 +107,30 @@ the daily rollup grows without limit, at about a megabyte a day.
 `/api/analytics/health` reports the size of each realtime table under
 `storage`, and the page warns when the disk is under a tenth free.
 
-What is not bounded is Docker. Each build leaves layers in the build cache,
-so run `docker builder prune -f` after a deploy. Container logs are capped
-in compose at three 20 MB files per service, except the database, which is
-left on the default so a compose change there never restarts Postgres.
+What is not bounded is Docker. Each pull leaves the previous image behind
+and each build leaves layers in the cache, so run `docker image prune -f`,
+or `docker builder prune -f` after a build, once a deploy is up. Container
+logs are capped in compose at three 20 MB files per service, except the
+database, which is left on the default so a compose change there never
+restarts Postgres.
+
+## Backup
+
+Only `arrival_score_daily` cannot be rebuilt; everything else is refetched or
+pruned inside its retention window. Dump it weekly, alongside the feed reload,
+and copy the directory off the box now and then:
+
+```bash
+mkdir -p backups && docker compose exec -T db pg_dump -U tracker -d tracker \
+    --data-only -t arrival_score_daily | gzip > backups/rollup-$(date +%F).sql.gz
+```
+
+In a crontab the `%` must be written `\%`. To restore into a fresh database,
+start the stack so the schema exists, then:
+
+```bash
+gunzip -c backups/rollup-2026-09-27.sql.gz | docker compose exec -T db psql -U tracker -d tracker
+```
 
 ## Caching
 
