@@ -153,7 +153,10 @@ export default function App() {
             route_type: filters.current.routeType,
             min_observations: 3,
           }),
-          api.divergence({ minutes: filters.current.windowMinutes }),
+          api.divergence({
+            minutes: filters.current.windowMinutes,
+            route_type: filters.current.routeType,
+          }),
         ]);
         if (!alive) return;
         setDelayRoutes(d.routes);

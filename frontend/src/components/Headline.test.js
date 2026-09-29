@@ -8,7 +8,7 @@ describe("noun", () => {
     expect(noun(3)).toBe("bus");
     expect(noun(3, 212)).toBe("buses");
     expect(noun(1)).toBe("subway train");
-    expect(noun(0, 2)).toBe("Green Line trains");
+    expect(noun(0, 2)).toBe("light rail trains");
     expect(noun(2)).toBe("commuter train");
   });
 
@@ -81,12 +81,14 @@ describe("splitDelays", () => {
     expect(waiting).toBe(0);
   });
 
-  it("drops vehicles with no figure", () => {
-    const { delays, waiting } = splitDelays([
+  it("counts vehicles with no figure as having no timetable", () => {
+    const { delays, waiting, noTimetable } = splitDelays([
       feature({ method: null, computed_delay_s: null }),
       feature({ method: "interpolated" }),
+      feature({ method: "interpolated", computed_delay_s: 1296, confidence: "low" }),
     ]);
     expect(delays).toEqual([]);
     expect(waiting).toBe(0);
+    expect(noTimetable).toBe(2);
   });
 });

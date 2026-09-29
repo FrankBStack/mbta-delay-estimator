@@ -11,6 +11,10 @@ export const DELAY_BUCKETS = [
 
 export const UNKNOWN_COLOR = "#4a4a48";
 
+// Below this many paired observations, one pair moves the agreement share by
+// more than two points, so it isn't shown.
+export const MIN_COMPARED = 50;
+
 export function delayColor(seconds) {
   if (seconds === null || seconds === undefined) return UNKNOWN_COLOR;
   return DELAY_BUCKETS.find((b) => seconds < b.max)?.color ?? "#d03b3b";

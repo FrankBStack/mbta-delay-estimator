@@ -32,7 +32,7 @@ async def test_vehicles_ahead_of_their_origin_are_left_out(conn, monkeypatch):
     assert [r["observations"] for r in out["routes"]] == [2]
     assert out["routes"][0]["mean_computed_s"] == 150
 
-    div = await analytics._divergence(60, False)
+    div = await analytics._divergence(60, None, False)
     assert div["observations"] == 2
 
 
@@ -43,6 +43,14 @@ async def test_divergence_thins_to_the_latest_per_vehicle_per_minute(conn, monke
         await observation(conn, "v", method="interpolated", delay_s=delay_s,
                           ts=minute + timedelta(seconds=offset_s))
 
-    div = await analytics._divergence(60, False)
+    div = await analytics._divergence(60, None, False)
     assert div["observations"] == 2
     assert div["mean_computed_s"] == 250  # the 100 is dropped: same minute, earlier
+
+
+async def test_divergence_follows_the_mode_filter(conn, monkeypatch):
+    monkeypatch.setattr(db, "_pool", conn)
+    await observation(conn, "bus", method="interpolated", delay_s=100)
+
+    assert (await analytics._divergence(60, 3, False))["observations"] == 1
+    assert (await analytics._divergence(60, 1, False))["observations"] == 0

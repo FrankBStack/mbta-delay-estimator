@@ -107,6 +107,7 @@ async def _delay_by_route(
 @router.get("/divergence")
 async def divergence(
     minutes: int = Query(60, ge=5, le=1440),
+    route_type: int | None = Query(None, ge=0, le=7),
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
     """How closely our number tracks the MBTA's. Read the spread and the share
@@ -117,8 +118,8 @@ async def divergence(
     Thinned to one observation per vehicle per minute. Consecutive 15s reports
     from the same vehicle are near-duplicates and would overstate the sample."""
     return await cache.get_or_set(
-        ("divergence", minutes, include_low_confidence),
-        lambda: _divergence(minutes, include_low_confidence),
+        ("divergence", minutes, route_type, include_low_confidence),
+        lambda: _divergence(minutes, route_type, include_low_confidence),
         ttl_s=ANALYTICS_TTL_S,
     )
 
@@ -138,6 +139,8 @@ THINNED = f"""
         FROM delay_observation d
         WHERE d.ts > now() - ($1 || ' minutes')::interval
           AND {CONFIDENCE_FILTER}
+          AND ($3::int IS NULL
+               OR d.route_id IN (SELECT route_id FROM route WHERE route_type = $3::int))
         GROUP BY d.vehicle_id, date_trunc('minute', d.ts)
     ) k
     JOIN delay_observation d
@@ -145,7 +148,9 @@ THINNED = f"""
 """
 
 
-async def _divergence(minutes: int, include_low_confidence: bool) -> dict[str, Any]:
+async def _divergence(
+    minutes: int, route_type: int | None, include_low_confidence: bool
+) -> dict[str, Any]:
     row = await db.pool().fetchrow(
         f"""
         WITH d AS ({THINNED})
@@ -170,6 +175,7 @@ async def _divergence(minutes: int, include_low_confidence: bool) -> dict[str, A
         """,
         str(minutes),
         _levels(include_low_confidence),
+        route_type,
     )
 
     by_method = await db.pool().fetch(
@@ -188,6 +194,7 @@ async def _divergence(minutes: int, include_low_confidence: bool) -> dict[str, A
         """,
         str(minutes),
         _levels(include_low_confidence),
+        route_type,
     )
 
     result = dict(row) if row else {}

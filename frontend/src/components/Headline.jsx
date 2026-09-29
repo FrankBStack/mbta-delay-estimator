@@ -1,9 +1,9 @@
-import { delayColor, formatDelay } from "../lib/delay.js";
+import { delayColor, formatDelay, MIN_COMPARED } from "../lib/delay.js";
 
 // keyed by GTFS route_type; null is the "All" filter
 const NOUNS = {
   null: ["vehicle", "vehicles"],
-  0: ["Green Line train", "Green Line trains"],
+  0: ["light rail train", "light rail trains"],
   1: ["subway train", "subway trains"],
   2: ["commuter train", "commuter trains"],
   3: ["bus", "buses"],
@@ -31,19 +31,24 @@ export function isWaiting(p) {
 export function splitDelays(features) {
   const delays = [];
   let waiting = 0;
+  // the hollow markers on the map
+  let noTimetable = 0;
   for (const f of features) {
     const p = f.properties;
-    if (p.computed_delay_s === null || p.computed_delay_s === undefined) continue;
+    if (p.computed_delay_s === null || p.computed_delay_s === undefined) {
+      noTimetable += 1;
+      continue;
+    }
     // the analytics leave these out too: off the shape, or implausibly late
     if (p.confidence === "low") continue;
     if (isWaiting(p)) waiting += 1;
     else delays.push(p.computed_delay_s);
   }
-  return { delays, waiting };
+  return { delays, waiting, noTimetable };
 }
 
 export default function Headline({ vehicles, divergence, windowMinutes, routeType }) {
-  const { delays, waiting } = splitDelays(vehicles?.features ?? []);
+  const { delays, waiting, noTimetable } = splitDelays(vehicles?.features ?? []);
 
   if (!delays.length) {
     return (
@@ -52,6 +57,8 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
         <div className="hero-value muted">—</div>
         <p className="muted small">
           Waiting for {noun(routeType, 2)} to be placed against the timetable.
+          {noTimetable > 0 &&
+            ` ${noTimetable} in service ${noTimetable === 1 ? "has" : "have"} no timetable.`}
         </p>
       </div>
     );
@@ -60,8 +67,9 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
   const typical = Math.round(median(delays));
   // >= to match the colour scale, which turns red at five minutes
   const late = delays.filter((d) => d >= 300).length;
-  const within = divergence?.pct_within_60s;
-  const spread = divergence?.stddev_divergence_s;
+  const enough = (divergence?.compared ?? 0) >= MIN_COMPARED;
+  const within = enough ? divergence.pct_within_60s : null;
+  const spread = enough ? divergence.stddev_divergence_s : null;
 
   return (
     <div className="hero">
@@ -73,6 +81,7 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
         Median of {delays.length} {noun(routeType, delays.length)} in service
         {late > 0 && ` · ${late} more than 5 min late`}
         {waiting > 0 && ` · ${waiting} waiting at origin`}
+        {noTimetable > 0 && ` · ${noTimetable} with no timetable`}
       </p>
       {within !== null && within !== undefined && (
         <p className="muted small hero-agreement">

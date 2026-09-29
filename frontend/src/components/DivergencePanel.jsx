@@ -1,7 +1,7 @@
-import { formatSigned, METHOD_LABELS } from "../lib/delay.js";
+import { formatSigned, METHOD_LABELS, MIN_COMPARED } from "../lib/delay.js";
 
 export default function DivergencePanel({ divergence }) {
-  if (!divergence || !divergence.compared) {
+  if (!divergence || (divergence.compared ?? 0) < MIN_COMPARED) {
     return (
       <p className="muted small">
         Waiting for enough paired observations to compare against the feed.
