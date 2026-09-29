@@ -3,6 +3,7 @@ import MapView from "./components/MapView.jsx";
 import DelayByRouteChart from "./components/DelayByRouteChart.jsx";
 import DivergencePanel from "./components/DivergencePanel.jsx";
 import Headline from "./components/Headline.jsx";
+import RouteSearch from "./components/RouteSearch.jsx";
 import VehicleCard from "./components/VehicleCard.jsx";
 import { api } from "./lib/api.js";
 import { DELAY_BUCKETS, formatClock, secondsAgo } from "./lib/delay.js";
@@ -54,25 +55,33 @@ export default function App() {
   const [windowMinutes, setWindowMinutes] = useState(
     () => readFilters(window.location.search).windowMinutes
   );
+  // one route picked out of the mode, by search or from the chart
+  const [routeId, setRouteId] = useState(() => readFilters(window.location.search).routeId);
+  const [routes, setRoutes] = useState([]);
   const [error, setError] = useState(null);
   const [analyticsError, setAnalyticsError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Held in a ref so the poll effects don't restart on every filter change.
-  const filters = useRef({ routeType, windowMinutes });
-  filters.current = { routeType, windowMinutes };
+  const filters = useRef({ routeType, windowMinutes, routeId });
+  filters.current = { routeType, windowMinutes, routeId };
 
   // The vehicle poll reads the latest health from here instead of waiting
   // on it: diagnostics must never hold up the map.
   const lastHealth = useRef(null);
 
   useEffect(() => {
-    const search = filterSearch({ routeType, windowMinutes });
+    const search = filterSearch({ routeType, windowMinutes, routeId });
     const { pathname, hash } = window.location;
     if (search !== window.location.search) {
       window.history.replaceState(null, "", `${pathname}${search}${hash}`);
     }
-  }, [routeType, windowMinutes]);
+  }, [routeType, windowMinutes, routeId]);
+
+  // names for the search and the headline; without them the search is empty
+  useEffect(() => {
+    api.routes().then(setRoutes, () => {});
+  }, []);
 
   // live poll, backing off while it fails
   useEffect(() => {
@@ -84,7 +93,8 @@ export default function App() {
     return startPolling(async (alive) => {
       let ok = false;
       try {
-        const v = await api.vehicles({ route_type: filters.current.routeType });
+        const { routeId: id, routeType: type } = filters.current;
+        const v = await api.vehicles(id ? { route_id: id } : { route_type: type });
         if (!alive()) return;
         const age = secondsAgo(lastHealth.current?.poller?.feed_timestamp);
         const feedStale = age !== null && age > STALE_AFTER_S;
@@ -103,7 +113,7 @@ export default function App() {
       delay = nextDelay(delay, ok);
       return delay;
     });
-  }, [routeType]);
+  }, [routeType, routeId]);
 
   // health poll: the feed time in the topbar and what the status banner reads.
   // A failure here just leaves the last answer in place; the vehicle poll owns
@@ -170,11 +180,34 @@ export default function App() {
     [vehicles, hoveredVehicleId]
   );
   const selectedRouteId = selected?.properties?.route_id ?? null;
+  const drawnRouteId = routeId ?? selectedRouteId;
+  const route = useMemo(
+    () => routes.find((r) => r.route_id === routeId) ?? null,
+    [routes, routeId]
+  );
 
-  // Draw the route line for the selected vehicle, and a fainter one for
-  // whichever is under the cursor.
-  useRouteShape(selectedRouteId, setRouteShape);
-  useRouteShape(hoveredRouteId === selectedRouteId ? null : hoveredRouteId, setHoverShape);
+  // Draw the line for the picked route or the selected vehicle's, and a
+  // fainter one for whichever is under the cursor.
+  useRouteShape(drawnRouteId, setRouteShape);
+  useRouteShape(hoveredRouteId === drawnRouteId ? null : hoveredRouteId, setHoverShape);
+  // only once the picked route's own line has arrived, not the one before it
+  const fitTo = routeId && routeShape?.properties?.route_id === routeId ? routeShape : null;
+
+  const handleRoute = useCallback(
+    (id) => {
+      setRouteId(id);
+      if (!id) return;
+      // a route outside the chosen mode brings its mode along, or All where
+      // the page has no button for it
+      const r = routes.find((x) => x.route_id === id);
+      if (r && routeType !== null && r.route_type !== routeType) {
+        setRouteType(MODES.some((m) => m.value === r.route_type) ? r.route_type : null);
+      }
+      // phones: back to the map the route was picked for
+      setSheet("peek");
+    },
+    [routes, routeType]
+  );
 
   const handleSelect = useCallback((id) => {
     setSelectedVehicleId(id);
@@ -222,14 +255,20 @@ export default function App() {
           <div>
             <h1>MBTA Delay Estimator</h1>
             <p className="muted small">
-              {vehicles?.features.length ?? 0} vehicles ·{" "}
-              {health?.poller?.feed_timestamp
-                ? `feed ${formatClock(health.poller.feed_timestamp)}`
-                : "connecting…"}
+              {vehicles?.features.length ?? 0} vehicles
+              {health?.poller?.feed_timestamp ? (
+                <span className="feed-time">
+                  {` · feed ${formatClock(health.poller.feed_timestamp)}`}
+                </span>
+              ) : (
+                " · connecting…"
+              )}
               <FeedAge ts={health?.poller?.feed_timestamp} />
             </p>
           </div>
         </div>
+
+        <RouteSearch routes={routes} routeId={routeId} onSelect={handleRoute} />
 
         <div className="filters">
           <div className="segmented" role="group" aria-label="Mode">
@@ -237,7 +276,10 @@ export default function App() {
               <button
                 key={String(m.value)}
                 className={routeType === m.value ? "on" : ""}
-                onClick={() => setRouteType(m.value)}
+                onClick={() => {
+                  setRouteType(m.value);
+                  setRouteId(null);
+                }}
               >
                 {m.label}
               </button>
@@ -264,6 +306,7 @@ export default function App() {
           stale={stale}
           routeShape={routeShape}
           hoverShape={hoverShape}
+          fitTo={fitTo}
           selectedVehicleId={selectedVehicleId}
           onSelectVehicle={handleSelect}
           onHoverVehicle={handleHover}
@@ -318,7 +361,7 @@ export default function App() {
             <span />
           </button>
 
-          <Headline vehicles={vehicles} routeType={routeType} />
+          <Headline vehicles={vehicles} routeType={routeType} route={route} />
 
           {selected && (
             <VehicleCard vehicle={selected} onClose={() => handleSelect(null)} />
@@ -343,6 +386,8 @@ export default function App() {
               routes={delayRoutes}
               windowMinutes={windowMinutes}
               loading={loading}
+              selectedRouteId={routeId}
+              onSelectRoute={handleRoute}
             />
           </div>
 

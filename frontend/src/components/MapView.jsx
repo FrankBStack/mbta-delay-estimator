@@ -2,12 +2,22 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { formatDelay, noDelayLabel } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
+import { bounds } from "../lib/routes.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 // Mirrors the phone layout in index.css: the sheet opens over this share of
 // the map when a vehicle is tapped.
 const PHONE = window.matchMedia("(max-width: 760px) and (orientation: portrait)");
 const SHEET_HALF = 0.5;
+const SHORT = window.matchMedia("(max-height: 500px) and (orientation: landscape)");
+// Room a framed route leaves for what sits over the map in each layout of
+// index.css: the legend column bottom-left on desktop; on small screens the
+// legend row along the top, and on phones the collapsed sheet (--peek) too.
+function fitPadding() {
+  if (PHONE.matches) return { top: 64, bottom: 170, left: 24, right: 24 };
+  if (SHORT.matches) return { top: 56, bottom: 24, left: 24, right: 24 };
+  return { top: 48, bottom: 48, left: 250, right: 64 };
+}
 // Touch browsers synthesise mouse events on tap, which would leave the hover
 // popup stuck over the marker; the card already shows the same details.
 const HOVER = window.matchMedia("(hover: hover)");
@@ -21,6 +31,7 @@ export default function MapView({
   vehicles,
   routeShape,
   hoverShape,
+  fitTo = null,
   selectedVehicleId,
   onSelectVehicle,
   onHoverVehicle,
@@ -240,6 +251,20 @@ export default function MapView({
       ]);
     }
   }, [selectedVehicleId, vehicles]);
+
+  // frame a route when it's picked, not on every change to the drawn line
+  useEffect(() => {
+    const b = bounds(fitTo?.geometry);
+    if (!map.current || !b) return;
+    const apply = () =>
+      map.current?.fitBounds(b, {
+        padding: fitPadding(),
+        maxZoom: 14,
+        duration: 600,
+      });
+    if (ready.current) apply();
+    else map.current.once("load", apply);
+  }, [fitTo]);
 
   useSourceData(map, ready, "route-shape", routeShape);
   useSourceData(map, ready, "route-hover", hoverShape);

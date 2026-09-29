@@ -90,6 +90,65 @@ p {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.brand > div {
+  min-width: 0;
+}
+.brand h1,
+.brand p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.route-search {
+  position: relative;
+  width: 240px;
+}
+.route-search input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 5px 30px 5px 10px;
+}
+.route-search input::placeholder {
+  color: var(--text-muted);
+}
+.route-search input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+/* Chrome's datalist arrow would sit under the clear button */
+.route-search input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+.route-clear {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.route-clear:hover {
+  color: var(--text-primary);
+}
+.route-clear:focus-visible {
+  outline: 2px solid var(--focus);
 }
 
 .dot {
@@ -499,6 +558,38 @@ main {
 .data-table.tight th {
   padding: 3px 4px;
 }
+.data-table tr.on td {
+  background: rgba(57, 135, 229, 0.14);
+}
+
+/* the route chart's rows pick a route */
+.chart-row {
+  cursor: pointer;
+}
+.chart-row:focus {
+  outline: none;
+}
+.chart-row:focus-visible rect {
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+.link-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 
 /* vehicle card */
 .kv {
@@ -661,6 +752,18 @@ main {
   .filters,
   .filters .segmented {
     width: 100%;
+  }
+  /* room for the search beside the title; the clock is in the age anyway */
+  .feed-time {
+    display: none;
+  }
+  .route-search {
+    width: 150px;
+  }
+  /* 16px or iOS zooms the page on focus */
+  .route-search input {
+    font-size: 16px;
+    padding: 6px 32px 6px 10px;
   }
   .filters .segmented button {
     flex: 1;

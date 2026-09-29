@@ -16,7 +16,13 @@ const CHAR_W = 5.8;
 // sidebar less its padding — used only until the first measurement lands
 const FALLBACK_W = 318;
 
-export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
+export default function DelayByRouteChart({
+  routes,
+  windowMinutes,
+  loading,
+  selectedRouteId = null,
+  onSelectRoute,
+}) {
   const [asTable, setAsTable] = useState(false);
   const [hover, setHover] = useState(null);
   const [measured, setMeasured] = useState(0);
@@ -73,6 +79,8 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
   const scale = (v) => ((v - domain.lo) / (domain.hi - domain.lo || 1)) * plotW;
   const zeroX = scale(0);
   const ticks = niceTicks(domain.lo, domain.hi);
+  // choosing the route already shown puts every route back
+  const choose = (id) => onSelectRoute?.(id === selectedRouteId ? null : id);
 
   return (
     <div className="chart">
@@ -80,7 +88,8 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
         <div>
           <h3>Mean delay by route</h3>
           <p className="muted small">
-            Worst {rows.length} of {routes.length} routes · last {windowMinutes} min
+            Worst {rows.length} of {routes.length} routes · last {windowMinutes} min.
+            Choose one to see it on the map.
           </p>
         </div>
         <button className="ghost-btn" onClick={() => setAsTable((v) => !v)}>
@@ -110,8 +119,16 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.route_id}>
-                <td>{r.name}</td>
+              <tr key={r.route_id} className={r.route_id === selectedRouteId ? "on" : ""}>
+                <td>
+                  <button
+                    className="link-btn"
+                    aria-pressed={r.route_id === selectedRouteId}
+                    onClick={() => choose(r.route_id)}
+                  >
+                    {r.name}
+                  </button>
+                </td>
                 <td className="num">{formatDelay(r.mean_computed_s)}</td>
                 <td className="num">{formatDelay(r.mean_feed_s)}</td>
                 <td className="num">{formatSigned(r.mean_divergence_s)}</td>
@@ -126,7 +143,7 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
             width={width}
             height={height}
             viewBox={`0 0 ${width} ${height}`}
-            role="img"
+            role="group"
             aria-label="Mean delay by route, computed from vehicle position compared with the MBTA's own prediction"
           >
             {ticks.map((t) => (
@@ -155,8 +172,22 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
               return (
                 <g
                   key={r.route_id}
+                  className="chart-row"
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={r.route_id === selectedRouteId}
+                  aria-label={`${r.name}, ${formatDelay(r.mean_computed_s)}. Show on the map`}
+                  onClick={() => choose(r.route_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      choose(r.route_id);
+                    }
+                  }}
                   onMouseEnter={() => setHover(r.route_id)}
                   onMouseLeave={() => setHover(null)}
+                  onFocus={() => setHover(r.route_id)}
+                  onBlur={() => setHover(null)}
                 >
                   {/* whole row is the hit target, not just the bars */}
                   <title>{r.name}</title>
@@ -165,7 +196,14 @@ export default function DelayByRouteChart({ routes, windowMinutes, loading }) {
                     y={y}
                     width={width}
                     height={ROW_H}
-                    fill={hover === r.route_id ? "rgba(255,255,255,0.05)" : "transparent"}
+                    rx={4}
+                    fill={
+                      r.route_id === selectedRouteId
+                        ? "rgba(57,135,229,0.16)"
+                        : hover === r.route_id
+                          ? "rgba(255,255,255,0.05)"
+                          : "transparent"
+                    }
                   />
                   <text x={0} y={y + ROW_H / 2 + 4} className="row-label">
                     {truncate(shortName(r.name), maxChars)}

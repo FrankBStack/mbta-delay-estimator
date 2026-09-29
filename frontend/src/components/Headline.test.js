@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { median, noun, splitDelays } from "./Headline.jsx";
+import { median, noun, splitDelays, subject } from "./Headline.jsx";
 
 const feature = (props) => ({ properties: props });
 
@@ -18,7 +18,19 @@ describe("noun", () => {
   });
 
   it("falls back for a mode without a name", () => {
-    expect(noun(4, 3)).toBe("vehicles");
+    expect(noun(5, 3)).toBe("vehicles");
+  });
+});
+
+describe("subject", () => {
+  it("puts the picked route's name before its mode", () => {
+    expect(subject({ name: "39", route_type: 3 }, null)).toBe("39 bus");
+    expect(subject({ name: "Red Line", route_type: 1 }, 3, 4)).toBe("Red Line subway trains");
+  });
+
+  it("is the mode's noun without a route", () => {
+    expect(subject(null, 3, 2)).toBe("buses");
+    expect(subject(null, null)).toBe("vehicle");
   });
 });
 

@@ -7,11 +7,18 @@ const NOUNS = {
   1: ["subway train", "subway trains"],
   2: ["commuter train", "commuter trains"],
   3: ["bus", "buses"],
+  // a route is named "Charlestown Ferry" already
+  4: ["boat", "boats"],
 };
 
 export function noun(routeType, count = 1) {
   const pair = NOUNS[routeType] ?? NOUNS[null];
   return count === 1 ? pair[0] : pair[1];
+}
+
+// "39 bus", "Red Line subway trains", or the mode's noun when no route is picked
+export function subject(route, routeType, count = 1) {
+  return route ? `${route.name} ${noun(route.route_type, count)}` : noun(routeType, count);
 }
 
 export function median(values) {
@@ -47,16 +54,20 @@ export function splitDelays(features) {
   return { delays, waiting, noTimetable };
 }
 
-export default function Headline({ vehicles, routeType }) {
+export default function Headline({ vehicles, routeType, route = null }) {
   const { delays, waiting, noTimetable } = splitDelays(vehicles?.features ?? []);
+  const type = route ? route.route_type : routeType;
 
   if (!delays.length) {
+    const none = vehicles && !vehicles.features.length;
     return (
       <div className="hero">
         <p className="hero-kicker">Right now</p>
         <div className="hero-value muted">—</div>
         <p className="muted small">
-          Waiting for {noun(routeType, 2)} to be placed against the timetable.
+          {none
+            ? `No ${subject(route, routeType, 2)} in service.`
+            : `Waiting for ${subject(route, routeType, 2)} to be placed against the timetable.`}
           {noTimetable > 0 &&
             ` ${noTimetable} in service ${noTimetable === 1 ? "has" : "have"} no timetable.`}
         </p>
@@ -70,12 +81,14 @@ export default function Headline({ vehicles, routeType }) {
 
   return (
     <div className="hero">
-      <p className="hero-kicker">Right now the typical MBTA {noun(routeType)} is</p>
+      <p className="hero-kicker">
+        Right now the typical {route ? subject(route) : `MBTA ${noun(routeType)}`} is
+      </p>
       <div className="hero-value" style={{ color: delayColor(typical) }}>
         {formatDelay(typical)}
       </div>
       <p className="muted small">
-        Median of {delays.length} {noun(routeType, delays.length)} in service
+        Median of {delays.length} {noun(type, delays.length)} in service
       </p>
       {/* keyed to the marker colours on the map */}
       <ul className="hero-counts">
