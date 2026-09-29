@@ -6,6 +6,8 @@ import Headline from "./components/Headline.jsx";
 import VehicleCard from "./components/VehicleCard.jsx";
 import { api } from "./lib/api.js";
 import { DELAY_BUCKETS, formatClock, secondsAgo } from "./lib/delay.js";
+import { MODES, WINDOWS, filterSearch, readFilters } from "./lib/filters.js";
+import { startPolling } from "./lib/poll.js";
 import {
   POLL_STEPS_MS,
   STALE_AFTER_S,
@@ -18,16 +20,6 @@ const ANALYTICS_POLL_MS = 30000;
 // One failed poll is noise; the banner waits for the next one to fail too.
 const ERROR_AFTER_FAILURES = 2;
 const DEV_HOST = /^(localhost|127\.0\.0\.1)$/;
-
-const MODES = [
-  { value: null, label: "All" },
-  { value: 1, label: "Subway" },
-  { value: 0, label: "Light rail" },
-  { value: 3, label: "Bus" },
-  { value: 2, label: "Commuter" },
-];
-
-const WINDOWS = [15, 60, 180];
 
 // Ticks on its own so the age counts up between polls without re-rendering
 // the map every second.
@@ -56,8 +48,12 @@ export default function App() {
   const [sheet, setSheet] = useState("peek");
   const sidebar = useRef(null);
   const touch = useRef(null);
-  const [routeType, setRouteType] = useState(null);
-  const [windowMinutes, setWindowMinutes] = useState(60);
+  const [routeType, setRouteType] = useState(
+    () => readFilters(window.location.search).routeType
+  );
+  const [windowMinutes, setWindowMinutes] = useState(
+    () => readFilters(window.location.search).windowMinutes
+  );
   const [error, setError] = useState(null);
   const [analyticsError, setAnalyticsError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,82 +66,70 @@ export default function App() {
   // on it: diagnostics must never hold up the map.
   const lastHealth = useRef(null);
 
+  useEffect(() => {
+    const search = filterSearch({ routeType, windowMinutes });
+    const { pathname, hash } = window.location;
+    if (search !== window.location.search) {
+      window.history.replaceState(null, "", `${pathname}${search}${hash}`);
+    }
+  }, [routeType, windowMinutes]);
+
   // live poll, backing off while it fails
   useEffect(() => {
-    let alive = true;
-    let timer;
     let delay = POLL_STEPS_MS[0];
     let failures = 0;
     // holding the last good positions only makes sense within one filter;
     // the first answer for a new filter replaces the old set outright
     let first = true;
-    const tick = async () => {
+    return startPolling(async (alive) => {
       let ok = false;
       try {
         const v = await api.vehicles({ route_type: filters.current.routeType });
-        if (!alive) return;
+        if (!alive()) return;
         const age = secondsAgo(lastHealth.current?.poller?.feed_timestamp);
         const feedStale = age !== null && age > STALE_AFTER_S;
-        setVehicles((prev) => (first ? v : keepLastGood(prev, v, feedStale)));
+        // React may run the updater after first is cleared below
+        const replace = first;
+        setVehicles((prev) => (replace ? v : keepLastGood(prev, v, feedStale)));
         first = false;
         setError(null);
         failures = 0;
         ok = true;
       } catch (e) {
         failures += 1;
-        if (alive && failures >= ERROR_AFTER_FAILURES) setError(e.message);
-      } finally {
-        if (alive) {
-          setLoading(false);
-          delay = nextDelay(delay, ok);
-          timer = setTimeout(tick, delay);
-        }
+        if (alive() && failures >= ERROR_AFTER_FAILURES) setError(e.message);
       }
-    };
-    tick();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+      if (alive()) setLoading(false);
+      delay = nextDelay(delay, ok);
+      return delay;
+    });
   }, [routeType]);
 
   // health poll: the feed time in the topbar and what the status banner reads.
   // A failure here just leaves the last answer in place; the vehicle poll owns
   // the error banner.
   useEffect(() => {
-    let alive = true;
-    let timer;
     let delay = POLL_STEPS_MS[0];
-    const tick = async () => {
+    return startPolling(async (alive) => {
       let ok = false;
       try {
         const h = await api.health();
-        if (!alive) return;
+        if (!alive()) return;
         lastHealth.current = h;
         setHealth(h);
         ok = true;
       } catch {
         ok = false;
-      } finally {
-        if (alive) {
-          delay = nextDelay(delay, ok);
-          timer = setTimeout(tick, delay);
-        }
       }
-    };
-    tick();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+      delay = nextDelay(delay, ok);
+      return delay;
+    });
   }, []);
 
   // analytics poll
   useEffect(() => {
-    let alive = true;
-    let timer;
     let failures = 0;
-    const tick = async () => {
+    return startPolling(async (alive) => {
       try {
         const [d, dv] = await Promise.all([
           api.delayByRoute({
@@ -158,23 +142,17 @@ export default function App() {
             route_type: filters.current.routeType,
           }),
         ]);
-        if (!alive) return;
+        if (!alive()) return;
         setDelayRoutes(d.routes);
         setDivergence(dv);
         setAnalyticsError(null);
         failures = 0;
       } catch (e) {
         failures += 1;
-        if (alive && failures >= ERROR_AFTER_FAILURES) setAnalyticsError(e.message);
-      } finally {
-        if (alive) timer = setTimeout(tick, ANALYTICS_POLL_MS);
+        if (alive() && failures >= ERROR_AFTER_FAILURES) setAnalyticsError(e.message);
       }
-    };
-    tick();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+      return ANALYTICS_POLL_MS;
+    });
   }, [routeType, windowMinutes]);
 
   const selected = useMemo(

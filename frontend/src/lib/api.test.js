@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RETRY_DELAY_MS, api } from "./api.js";
+import { RETRY_DELAY_MS, TIMEOUT_MS, api } from "./api.js";
 
 function fetchOk(body) {
   return vi.fn(async () => ({ ok: true, status: 200, statusText: "OK", json: async () => body }));
@@ -33,6 +33,22 @@ describe("api network failures", () => {
     await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS);
     await expect(pending).rejects.toThrow("Failed to fetch");
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up on a request that never answers", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(
+      (url, { signal }) =>
+        new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        })
+    );
+    vi.stubGlobal("fetch", fetch);
+    const pending = api.vehicles();
+    pending.catch(() => {});
+    await vi.advanceTimersByTimeAsync(TIMEOUT_MS);
+    await expect(pending).rejects.toThrow("No response in 10s on /api/vehicles");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("does not retry an HTTP error", async () => {
