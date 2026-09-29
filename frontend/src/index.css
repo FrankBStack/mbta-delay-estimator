@@ -279,7 +279,7 @@ main {
 /* outline, so "no data" doesn't read as another step on the scale */
 .chip-hollow {
   background: transparent;
-  border: 1px solid #6a6a68;
+  border: 1.5px solid #9a9993;
 }
 
 .legend-overlay {
@@ -308,6 +308,17 @@ main {
   margin-top: 3px;
   line-height: 1.35;
 }
+.legend-scale {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.legend-scale > span:not(.chip) {
+  margin: 0 3px;
+}
 
 /* headline */
 .hero {
@@ -328,6 +339,55 @@ main {
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   margin: 3px 0 6px;
+}
+
+.hero-counts {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.hero-counts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.window-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* the accuracy panel's working, one click away */
+.more {
+  margin-top: 2px;
+}
+.more summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+.more summary:hover {
+  color: var(--text-primary);
+}
+.more summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.more[open] summary {
+  margin-bottom: 8px;
+}
+.more p {
+  margin-bottom: 8px;
 }
 
 /* tiles */
@@ -588,9 +648,6 @@ main {
   .vehicle-card {
     order: -1;
   }
-  .sidebar[data-open="peek"] .hero-agreement {
-    display: none;
-  }
   .hero {
     padding-top: 0;
   }
@@ -601,10 +658,12 @@ main {
     padding: 8px 12px;
     gap: 6px;
   }
-  .filters {
+  .filters,
+  .filters .segmented {
     width: 100%;
-    justify-content: space-between;
-    gap: 6px;
+  }
+  .filters .segmented button {
+    flex: 1;
   }
   /* finger-sized */
   .segmented button {
@@ -630,14 +689,15 @@ main {
   }
 }
 
-/* Small screens: the legend is one scrolling row across the top of the map
-   instead of a column down its side */
+/* Small screens: the legend is one row across the top of the map instead of
+   a column down its side, with the steps drawn as a single scale */
 @media (max-width: 760px) and (orientation: portrait),
   (max-height: 500px) and (orientation: landscape) {
   .legend-overlay {
     top: 8px;
     left: 8px;
-    right: 56px;
+    right: auto;
+    max-width: calc(100% - 64px);
     bottom: auto;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -650,8 +710,12 @@ main {
     display: none;
   }
   .legend-title,
-  .legend-note {
+  .legend-note,
+  .legend-step {
     display: none;
+  }
+  .legend-scale {
+    display: inline-flex;
   }
   .legend-item {
     font-size: 10.5px;

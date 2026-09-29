@@ -1,4 +1,4 @@
-import { DELAY_BUCKETS, UNKNOWN_COLOR, delayBucketExpression } from "./delay.js";
+import { DELAY_BUCKETS, delayBucketExpression } from "./delay.js";
 
 // One raster image per (shape, delay bucket). The layer picks one by name
 // with a data-driven icon-image expression, and MapLibre rotates it by the
@@ -9,13 +9,14 @@ const SIZE = 32;
 const RADIUS = 9;
 const TIP = 14; // distance from center to the nose; > RADIUS makes the point
 const RING = "#12121a";
-const RING_UNKNOWN = "#6a6a68";
+const RING_UNKNOWN = "#9a9993";
 
 export const SHAPES = ["arrow", "dot"];
 
 const FILLS = [
   ...DELAY_BUCKETS.map((b) => [b.key, b.color, RING]),
-  ["unknown", UNKNOWN_COLOR, RING_UNKNOWN],
+  // hollow like its legend chip, so it can't pass for the grey of on time
+  ["unknown", RING, RING_UNKNOWN],
 ];
 
 export function markerName(shape, bucket) {

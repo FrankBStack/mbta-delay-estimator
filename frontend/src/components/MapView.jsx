@@ -107,7 +107,7 @@ export default function MapView({
           "symbol-sort-key": ["case", ["get", "is_rail"], 2, 1],
         },
         paint: {
-          "icon-opacity": ["case", ["get", "has_delay"], 0.95, 0.45],
+          "icon-opacity": ["case", ["get", "has_delay"], 0.95, 0.75],
         },
       });
 

@@ -1,4 +1,4 @@
-import { delayColor, formatDelay, MIN_COMPARED } from "../lib/delay.js";
+import { delayColor, formatDelay } from "../lib/delay.js";
 
 // keyed by GTFS route_type; null is the "All" filter
 const NOUNS = {
@@ -47,7 +47,7 @@ export function splitDelays(features) {
   return { delays, waiting, noTimetable };
 }
 
-export default function Headline({ vehicles, divergence, windowMinutes, routeType }) {
+export default function Headline({ vehicles, routeType }) {
   const { delays, waiting, noTimetable } = splitDelays(vehicles?.features ?? []);
 
   if (!delays.length) {
@@ -67,9 +67,6 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
   const typical = Math.round(median(delays));
   // >= to match the colour scale, which turns red at five minutes
   const late = delays.filter((d) => d >= 300).length;
-  const enough = (divergence?.compared ?? 0) >= MIN_COMPARED;
-  const within = enough ? divergence.pct_within_60s : null;
-  const spread = enough ? divergence.stddev_divergence_s : null;
 
   return (
     <div className="hero">
@@ -79,17 +76,28 @@ export default function Headline({ vehicles, divergence, windowMinutes, routeTyp
       </div>
       <p className="muted small">
         Median of {delays.length} {noun(routeType, delays.length)} in service
-        {late > 0 && ` · ${late} more than 5 min late`}
-        {waiting > 0 && ` · ${waiting} waiting at origin`}
-        {noTimetable > 0 && ` · ${noTimetable} with no timetable`}
       </p>
-      {within !== null && within !== undefined && (
-        <p className="muted small hero-agreement">
-          Within a minute of the MBTA's own prediction {within}% of the time
-          {spread !== null && spread !== undefined && ` (σ ${spread}s)`} over
-          the last {windowMinutes} min
-        </p>
-      )}
+      {/* keyed to the marker colours on the map */}
+      <ul className="hero-counts">
+        {late > 0 && (
+          <li>
+            <span className="chip" style={{ background: delayColor(300) }} />
+            {late} more than 5 min late
+          </li>
+        )}
+        {waiting > 0 && (
+          <li>
+            <span className="chip" style={{ background: delayColor(0) }} />
+            {waiting} waiting at origin
+          </li>
+        )}
+        {noTimetable > 0 && (
+          <li>
+            <span className="chip chip-hollow" />
+            {noTimetable} with no timetable
+          </li>
+        )}
+      </ul>
     </div>
   );
 }

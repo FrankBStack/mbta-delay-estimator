@@ -243,17 +243,6 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="segmented" role="group" aria-label="Analytics window">
-            {WINDOWS.map((w) => (
-              <button
-                key={w}
-                className={windowMinutes === w ? "on" : ""}
-                onClick={() => setWindowMinutes(w)}
-              >
-                {w}m
-              </button>
-            ))}
-          </div>
         </div>
       </header>
 
@@ -283,11 +272,23 @@ export default function App() {
         <div className="legend-overlay">
           <div className="legend-title">Delay vs schedule</div>
           {DELAY_BUCKETS.map((b) => (
-            <span key={b.key} className="legend-item">
+            <span key={b.key} className="legend-item legend-step">
               <span className="chip" style={{ background: b.color }} />
               {b.label}
             </span>
           ))}
+          {/* small screens: the same steps as one scale, so late fits too */}
+          <span
+            className="legend-scale"
+            role="img"
+            aria-label="Colours run from blue for early, through grey for on time, to red for late"
+          >
+            <span>Early</span>
+            {DELAY_BUCKETS.map((b) => (
+              <span key={b.key} className="chip" style={{ background: b.color }} />
+            ))}
+            <span>Late</span>
+          </span>
           <span className="legend-item">
             <span className="chip chip-hollow" />
             No timetable
@@ -317,27 +318,36 @@ export default function App() {
             <span />
           </button>
 
-          <Headline
-            vehicles={vehicles}
-            divergence={divergence}
-            windowMinutes={windowMinutes}
-            routeType={routeType}
-          />
+          <Headline vehicles={vehicles} routeType={routeType} />
 
           {selected && (
             <VehicleCard vehicle={selected} onClose={() => handleSelect(null)} />
           )}
 
           <div className="panel-block">
-            <DivergencePanel divergence={divergence} />
-          </div>
-
-          <div className="panel-block">
+            <div className="window-row">
+              <span className="muted small">Statistics over the last</span>
+              <div className="segmented" role="group" aria-label="Statistics window">
+                {WINDOWS.map((w) => (
+                  <button
+                    key={w}
+                    className={windowMinutes === w ? "on" : ""}
+                    onClick={() => setWindowMinutes(w)}
+                  >
+                    {w}m
+                  </button>
+                ))}
+              </div>
+            </div>
             <DelayByRouteChart
               routes={delayRoutes}
               windowMinutes={windowMinutes}
               loading={loading}
             />
+          </div>
+
+          <div className="panel-block">
+            <DivergencePanel divergence={divergence} />
           </div>
 
           <p className="footnote">

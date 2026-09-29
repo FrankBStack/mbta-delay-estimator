@@ -16,16 +16,16 @@ export default function DivergencePanel({ divergence }) {
     pct_within_60s,
     compared,
     by_method,
+    window_minutes,
   } = divergence;
 
   return (
     <div className="panel-block">
       <div className="chart-head">
         <div>
-          <h3>Our number vs the MBTA's</h3>
+          <h3>How accurate is this?</h3>
           <p className="muted small">
-            {compared.toLocaleString()} observations where both exist, one per
-            vehicle per minute
+            Our figure against the MBTA's own prediction · last {window_minutes} min
           </p>
         </div>
       </div>
@@ -47,37 +47,44 @@ export default function DivergencePanel({ divergence }) {
           hint="Positive = we read later than the feed does"
         />
       </div>
-      {correlation !== null && correlation !== undefined && (
+      <details className="more">
+        <summary>How it's measured</summary>
         <p className="muted small">
-          Correlation r = {correlation.toFixed(3)}. Both figures share the same
-          schedule baseline, so a high r is expected; the spread is the better test.
+          {compared.toLocaleString()} observations where both figures exist, one
+          per vehicle per minute.
         </p>
-      )}
+        {correlation !== null && correlation !== undefined && (
+          <p className="muted small">
+            Correlation r = {correlation.toFixed(3)}. Both figures share the same
+            schedule baseline, so a high r is expected; the spread is the better test.
+          </p>
+        )}
 
-      {by_method?.length > 0 && (
-        <table className="data-table tight">
-          <thead>
-            <tr>
-              <th>How the vehicle was placed</th>
-              <th>Obs</th>
-              <th>Mean |diff|</th>
-            </tr>
-          </thead>
-          <tbody>
-            {by_method.map((m) => (
-              <tr key={m.method}>
-                <td>{METHOD_LABELS[m.method] ?? m.method}</td>
-                <td className="num">{m.observations.toLocaleString()}</td>
-                <td className="num">
-                  {m.mean_abs_divergence_s !== null
-                    ? `${m.mean_abs_divergence_s}s`
-                    : "—"}
-                </td>
+        {by_method?.length > 0 && (
+          <table className="data-table tight">
+            <thead>
+              <tr>
+                <th>How the vehicle was placed</th>
+                <th>Obs</th>
+                <th>Mean |diff|</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {by_method.map((m) => (
+                <tr key={m.method}>
+                  <td>{METHOD_LABELS[m.method] ?? m.method}</td>
+                  <td className="num">{m.observations.toLocaleString()}</td>
+                  <td className="num">
+                    {m.mean_abs_divergence_s !== null
+                      ? `${m.mean_abs_divergence_s}s`
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </details>
     </div>
   );
 }
