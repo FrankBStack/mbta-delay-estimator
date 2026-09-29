@@ -386,6 +386,7 @@ export default function App() {
               routes={delayRoutes}
               windowMinutes={windowMinutes}
               loading={loading}
+              routeType={routeType}
               selectedRouteId={routeId}
               onSelectRoute={handleRoute}
             />

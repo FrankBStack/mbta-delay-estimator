@@ -1,18 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDelay, formatSigned } from "../lib/delay.js";
 
+// ours is the bar; the MBTA's is a tick on it, since the two mostly agree
+// and a second bar per route doubled the ink to say so
 const SERIES = {
   computed: { color: "#3987e5", label: "Computed from position" },
-  feed: { color: "#d95926", label: "MBTA prediction" },
+  feed: { color: "#e8e6df", label: "MBTA prediction" },
+};
+
+const MODE_NAMES = {
+  0: "light rail",
+  1: "subway",
+  2: "commuter rail",
+  3: "bus",
+  4: "ferry",
 };
 
 const ROW_H = 26;
-const BAR_H = 8;
+const BAR_H = 10;
+const TICK_H = 18;
 const VALUE_W = 50;
 const MIN_LABEL_W = 76;
 const MAX_LABEL_W = 132;
-// system-ui at 11px averages a shade under 6px a glyph
-const CHAR_W = 5.8;
+// the pill's bold 10.5px text averages about 6.3px a glyph
+const PILL_CHAR_W = 6.3;
+const PILL_PAD = 12;
 // sidebar less its padding — used only until the first measurement lands
 const FALLBACK_W = 318;
 
@@ -20,6 +32,7 @@ export default function DelayByRouteChart({
   routes,
   windowMinutes,
   loading,
+  routeType = null,
   selectedRouteId = null,
   onSelectRoute,
 }) {
@@ -74,7 +87,7 @@ export default function DelayByRouteChart({
   );
   const plotW = Math.max(90, width - labelW - VALUE_W);
   const height = rows.length * ROW_H + 22;
-  const maxChars = Math.max(6, Math.floor((labelW - 8) / CHAR_W));
+  const maxChars = Math.max(4, Math.floor((labelW - 8 - PILL_PAD) / PILL_CHAR_W));
 
   const scale = (v) => ((v - domain.lo) / (domain.hi - domain.lo || 1)) * plotW;
   const zeroX = scale(0);
@@ -88,7 +101,8 @@ export default function DelayByRouteChart({
         <div>
           <h3>Mean delay by route</h3>
           <p className="muted small">
-            Worst {rows.length} of {routes.length} routes · last {windowMinutes} min.
+            Worst {rows.length} of {routes.length} {MODE_NAMES[routeType] ?? ""} routes · last{" "}
+            {windowMinutes} min.
             Choose one to see it on the map.
           </p>
         </div>
@@ -98,12 +112,14 @@ export default function DelayByRouteChart({
       </div>
 
       <div className="legend">
-        {Object.entries(SERIES).map(([key, s]) => (
-          <span key={key} className="legend-item">
-            <span className="chip" style={{ background: s.color }} />
-            {s.label}
-          </span>
-        ))}
+        <span className="legend-item">
+          <span className="chip" style={{ background: SERIES.computed.color }} />
+          {SERIES.computed.label}
+        </span>
+        <span className="legend-item">
+          <span className="tick-chip" style={{ background: SERIES.feed.color }} />
+          {SERIES.feed.label}
+        </span>
       </div>
 
       {asTable ? (
@@ -169,6 +185,8 @@ export default function DelayByRouteChart({
 
             {rows.map((r, i) => {
               const y = i * ROW_H;
+              const name = truncate(shortName(r.name), maxChars);
+              const mode = MODE_NAMES[r.route_type];
               return (
                 <g
                   key={r.route_id}
@@ -176,7 +194,9 @@ export default function DelayByRouteChart({
                   role="button"
                   tabIndex={0}
                   aria-pressed={r.route_id === selectedRouteId}
-                  aria-label={`${r.name}, ${formatDelay(r.mean_computed_s)}. Show on the map`}
+                  aria-label={`${r.name}${mode ? ` ${mode}` : ""}, ${formatDelay(
+                    r.mean_computed_s
+                  )}; MBTA ${formatDelay(r.mean_feed_s)}. Show on the map`}
                   onClick={() => choose(r.route_id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -192,6 +212,7 @@ export default function DelayByRouteChart({
                   {/* whole row is the hit target, not just the bars */}
                   <title>{r.name}</title>
                   <rect
+                    className="row-bg"
                     x={0}
                     y={y}
                     width={width}
@@ -205,27 +226,40 @@ export default function DelayByRouteChart({
                           : "transparent"
                     }
                   />
-                  <text x={0} y={y + ROW_H / 2 + 4} className="row-label">
-                    {truncate(shortName(r.name), maxChars)}
+                  {/* the MBTA's own route colours: yellow bus, purple commuter rail */}
+                  <rect
+                    x={2}
+                    y={y + 5}
+                    width={name.length * PILL_CHAR_W + PILL_PAD}
+                    height={ROW_H - 10}
+                    rx={4}
+                    fill={r.color}
+                  />
+                  <text
+                    x={2 + PILL_PAD / 2}
+                    y={y + ROW_H / 2 + 3.5}
+                    className="row-pill"
+                    style={{ fill: textOn(r.color) }}
+                  >
+                    {name}
                   </text>
 
                   <path
                     d={barPath(
                       labelW + zeroX,
                       labelW + scale(r.mean_computed_s ?? 0),
-                      y + 3,
+                      y + (ROW_H - BAR_H) / 2,
                       BAR_H
                     )}
                     fill={SERIES.computed.color}
                   />
                   {r.mean_feed_s !== null && r.mean_feed_s !== undefined && (
-                    <path
-                      d={barPath(
-                        labelW + zeroX,
-                        labelW + scale(r.mean_feed_s),
-                        y + 3 + BAR_H + 2,
-                        BAR_H
-                      )}
+                    <rect
+                      x={labelW + scale(r.mean_feed_s) - 1}
+                      y={y + (ROW_H - TICK_H) / 2}
+                      width={2}
+                      height={TICK_H}
+                      rx={1}
                       fill={SERIES.feed.color}
                     />
                   )}
@@ -254,6 +288,9 @@ function HoverCard({ route }) {
   return (
     <div className="hovercard">
       <strong>{route.name}</strong>
+      {MODE_NAMES[route.route_type] && (
+        <span className="muted"> · {MODE_NAMES[route.route_type]}</span>
+      )}
       <dl>
         <dt>
           <span className="chip" style={{ background: SERIES.computed.color }} />
@@ -261,8 +298,8 @@ function HoverCard({ route }) {
         </dt>
         <dd>{formatDelay(route.mean_computed_s)}</dd>
         <dt>
-          <span className="chip" style={{ background: SERIES.feed.color }} />
-          Feed
+          <span className="tick-chip" style={{ background: SERIES.feed.color }} />
+          MBTA
         </dt>
         <dd>{formatDelay(route.mean_feed_s)}</dd>
         <dt>Divergence</dt>
@@ -304,6 +341,19 @@ export function niceTicks(lo, hi) {
   for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) out.push(t);
   if (!out.includes(0) && lo <= 0 && hi >= 0) out.push(0);
   return out.sort((a, b) => a - b);
+}
+
+// whichever of black or white text reads better on a route's colour
+export function textOn(hex) {
+  const n = parseInt(String(hex).replace("#", ""), 16);
+  if (Number.isNaN(n)) return "#fff";
+  const lin = (c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  // contrast against black beats contrast against white above this luminance
+  return l > 0.179 ? "#111" : "#fff";
 }
 
 export function shortName(s) {

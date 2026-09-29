@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { niceTicks, shortName, truncate } from "./DelayByRouteChart.jsx";
+import { niceTicks, shortName, textOn, truncate } from "./DelayByRouteChart.jsx";
 
 describe("shortName", () => {
   it("drops the redundant suffix that pushed names past the gutter", () => {
@@ -67,5 +67,23 @@ describe("niceTicks", () => {
       expect(t).toBeGreaterThanOrEqual(-200);
       expect(t).toBeLessThanOrEqual(700);
     }
+  });
+});
+
+describe("textOn", () => {
+  it("puts dark text on the light route colours", () => {
+    expect(textOn("#FFC72C")).toBe("#111"); // bus yellow
+    expect(textOn("#7C878E")).toBe("#111"); // Silver Line
+    expect(textOn("#ED8B00")).toBe("#111"); // Orange Line
+  });
+
+  it("puts white text on the dark ones", () => {
+    expect(textOn("#003DA5")).toBe("#fff"); // Blue Line
+    expect(textOn("#80276C")).toBe("#fff"); // commuter rail
+    expect(textOn("#DA291C")).toBe("#fff"); // Red Line
+  });
+
+  it("falls back to white for a colour it can't read", () => {
+    expect(textOn(undefined)).toBe("#fff");
   });
 });

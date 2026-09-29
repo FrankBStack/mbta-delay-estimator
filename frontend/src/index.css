@@ -335,6 +335,15 @@ main {
   flex: none;
 }
 
+/* the MBTA prediction's tick in the route chart */
+.tick-chip {
+  width: 2px;
+  height: 11px;
+  border-radius: 1px;
+  flex: none;
+  margin: 0 3px;
+}
+
 /* outline, so "no data" doesn't read as another step on the scale */
 .chip-hollow {
   background: transparent;
@@ -489,9 +498,9 @@ main {
   fill: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.row-label {
-  font-size: 11px;
-  fill: var(--text-secondary);
+.row-pill {
+  font-size: 10.5px;
+  font-weight: 600;
 }
 .row-value {
   font-size: 10.5px;
@@ -569,7 +578,7 @@ main {
 .chart-row:focus {
   outline: none;
 }
-.chart-row:focus-visible rect {
+.chart-row:focus-visible .row-bg {
   stroke: var(--focus);
   stroke-width: 2;
 }
