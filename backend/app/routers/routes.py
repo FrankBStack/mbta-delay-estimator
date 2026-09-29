@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .. import db
+from .. import cache, db
 
 router = APIRouter(prefix="/api", tags=["routes"])
 
@@ -18,6 +18,14 @@ ROUTE_TYPE_NAMES = {
 
 @router.get("/routes")
 async def list_routes(active_only: bool = Query(False)) -> list[dict[str, Any]]:
+    """Every route, with how many vehicles it has out. The page asks for this
+    once per load for its route search."""
+    return await cache.get_or_set(
+        ("routes", active_only), lambda: _list_routes(active_only), ttl_s=30
+    )
+
+
+async def _list_routes(active_only: bool) -> list[dict[str, Any]]:
     rows = await db.pool().fetch(
         """
         SELECT r.route_id, r.route_short_name, r.route_long_name, r.route_type,

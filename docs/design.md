@@ -1,12 +1,12 @@
 # Estimator design notes
 
-Detail behind the placement methods and confidence rules summarised in the
+Detail behind the placement methods and confidence rules summarized in the
 main README. The implementation is the single query in
 `backend/app/services/delay.py`.
 
 ## Projection
 
-All distance work runs in EPSG:26986 (NAD83 / Massachusetts Mainland, metres).
+All distance work runs in EPSG:26986 (NAD83 / Massachusetts Mainland, meters).
 At Boston's latitude a degree of longitude is approximately 0.74 of a degree of
 latitude, so locating a point on a line in unprojected WGS84 coordinates biases
 the result east-west. The SRID is fixed in `schema.sql` and `config.py`.

@@ -15,7 +15,7 @@ export const SHAPES = ["arrow", "dot"];
 
 const FILLS = [
   ...DELAY_BUCKETS.map((b) => [b.key, b.color, RING]),
-  // hollow like its legend chip, so it can't pass for the grey of on time
+  // hollow like its legend chip, so it can't pass for the gray of on time
   ["unknown", RING, RING_UNKNOWN],
 ];
 

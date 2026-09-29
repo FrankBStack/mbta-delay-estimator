@@ -22,7 +22,7 @@ TRIP_UPDATES_URL = os.getenv(
 POLL_INTERVAL_S = _int("POLL_INTERVAL_S", 15)
 AGENCY_TZ = os.getenv("AGENCY_TZ", "America/New_York")
 
-# NAD83 / Massachusetts Mainland, in metres. Everything that measures a
+# NAD83 / Massachusetts Mainland, in meters. Everything that measures a
 # distance goes through this rather than raw lat/lon. Not an env setting: the
 # geom_p column types in schema.sql are declared with this SRID, so changing
 # it means changing the schema too.

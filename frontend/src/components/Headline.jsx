@@ -76,7 +76,7 @@ export default function Headline({ vehicles, routeType, route = null }) {
   }
 
   const typical = Math.round(median(delays));
-  // >= to match the colour scale, which turns red at five minutes
+  // >= to match the color scale, which turns red at five minutes
   const late = delays.filter((d) => d >= 300).length;
 
   return (
@@ -90,7 +90,7 @@ export default function Headline({ vehicles, routeType, route = null }) {
       <p className="muted small">
         Median of {delays.length} {noun(type, delays.length)} in service
       </p>
-      {/* keyed to the marker colours on the map */}
+      {/* keyed to the marker colors on the map */}
       <ul className="hero-counts">
         {late > 0 && (
           <li>

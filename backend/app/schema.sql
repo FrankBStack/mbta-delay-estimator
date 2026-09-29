@@ -1,7 +1,7 @@
 -- MBTA tracker schema.
 --
 -- Two SRIDs throughout: 4326 for anything the feeds speak or MapLibre renders,
--- 26986 (Mass State Plane, metres) for anything we measure with. Doing the
+-- 26986 (Mass State Plane, meters) for anything we measure with. Doing the
 -- distance work in degrees skews it badly enough to matter.
 
 CREATE EXTENSION IF NOT EXISTS postgis;

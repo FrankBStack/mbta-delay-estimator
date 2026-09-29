@@ -32,7 +32,7 @@ is in the next section.
 
 ## The dwell hold, before and after
 
-Measured on Wednesday 16 September 2026 over the same two service windows as
+Measured on Wednesday, September 16, 2026 over the same two service windows as
 the July tables below. Every column scores the same observations against the
 same feed values; the only difference is the estimator. "Clock" re-derives the
 pre-hold figure from each observation's stored scheduled time, so `stopped_at`
@@ -107,7 +107,7 @@ The tail splits two ways:
   late while the clock and the feed both say an hour and forty-three.
 
 The second group is a real limitation of the plain hold. It is correct for a
-normal dwell of a minute or two, where the clock reading is an artefact of the
+normal dwell of a minute or two, where the clock reading is an artifact of the
 schedule having no dwell time, and wrong for a vehicle that is genuinely
 stuck.
 
@@ -160,7 +160,7 @@ The layover class alone moved from −323s mean divergence to −8s.
 
 ## Agreement across service levels
 
-Measured over a continuous run on Tuesday 28 July 2026, split between overnight
+Measured over a continuous run on Tuesday, July 28, 2026, split between overnight
 service and the weekday morning peak:
 
 | | Overnight (00:17–05:00) | Morning peak (07:00–09:10) |
@@ -207,3 +207,66 @@ Individual routes show the effect more sharply. At peak, route 504 measured
 window, route 8 measured 8m42s late while the MBTA predicted arrival 1m18s
 early, implying roughly ten minutes of expected recovery before its next
 timepoint.
+
+## Agreement by mode
+
+The per-mode table in the README (Monday, September 28, 2026) shows commuter
+rail agreeing with the feed far less often than the other modes: 67.9% within
+60s against 91–95%. Divergence alone can't say which side is off, so both
+figures were scored against actual arrivals (`arrival_score`, see
+[operations.md](operations.md#arrival-scoring)): for each arrival, the error of
+the MBTA's prediction and of the arrival our delay implied, at the moments the
+countdown read 1, 2, 5, 10, 15 and 20 minutes. Error is estimate minus
+actual, so negative means the train came later than the estimate said.
+637,602 arrivals scored September 24–29, 2026, 9,510 of them commuter rail:
+
+| Minutes out | MBTA mean abs error | MBTA bias | Position mean abs error | Position bias |
+|---:|---:|---:|---:|---:|
+| 1 | 18s | −13s | 31s | +11s |
+| 2 | 27s | −20s | 50s | +19s |
+| 5 | 54s | −45s | 68s | +11s |
+| 10 | 92s | −82s | 86s | −7s |
+| 15 | 119s | −110s | 104s | −25s |
+| 20 | 139s | −131s | 117s | −39s |
+
+The MBTA's commuter rail predictions run optimistic, and more so the further
+out. Ours is close to unbiased out to ten minutes. Because the site compares
+the two at the same moment, the gap between the biases is what the divergence
+measures: between stations, ours reads 55s later than the feed on average
+(87,739 observations in the 24 hours to 1:30 PM on September 29), which is the
+MBTA's −45s at five minutes less our +11s. Stopped trains agree 99% of the
+time, layovers 97%; the whole disagreement is between stations.
+
+The other modes show the same shape, only smaller, because their next stop is
+always close:
+
+| | 1 min: MBTA / position | 5 min | 10 min |
+|---|---:|---:|---:|
+| Subway | 11s (−8) / 28s (+13) | 35s (−27) / 45s (−3) | 62s (−52) / 59s (−23) |
+| Commuter rail | 18s (−13) / 31s (+11) | 54s (−45) / 68s (+11) | 92s (−82) / 86s (−7) |
+| Bus | 33s (−24) / 41s (−6) | 76s (−51) / 92s (−28) | 118s (−82) / 136s (−59) |
+
+Mean absolute error, with bias in brackets. On every mode the feed is more
+accurate inside five minutes and biased early; ours is noisier close in
+(position placement and the poll interval) and less biased further out.
+
+By line, agreement tracks station spacing. The 24 hours to 1:30 PM on September 29:
+
+| Line | Compared | Mean divergence | Within 60s |
+|---|---:|---:|---:|
+| Needham | 4,454 | +33s | 81.8% |
+| Fairmount | 5,920 | +34s | 80.0% |
+| Newburyport/Rockport | 14,019 | +40s | 74.0% |
+| Franklin/Foxboro | 8,381 | +40s | 73.0% |
+| Fitchburg | 11,948 | +40s | 70.3% |
+| Haverhill | 8,647 | +43s | 70.0% |
+| Lowell | 6,884 | +38s | 64.0% |
+| Framingham/Worcester | 12,476 | +61s | 63.3% |
+| Providence/Stoughton | 13,983 | +52s | 62.8% |
+| Greenbush | 5,037 | +52s | 59.6% |
+| Kingston | 5,542 | +52s | 57.4% |
+| Fall River/New Bedford | 13,563 | +50s | 55.2% |
+
+Nothing here points at an estimator rule to change. The short-horizon noise
+is placement and polling, not a systematic error, and the between-station gap
+is the feed's.

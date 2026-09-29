@@ -324,7 +324,7 @@ export default function App() {
           <span
             className="legend-scale"
             role="img"
-            aria-label="Colours run from blue for early, through grey for on time, to red for late"
+            aria-label="Colors run from blue for early, through gray for on time, to red for late"
           >
             <span>Early</span>
             {DELAY_BUCKETS.map((b) => (

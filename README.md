@@ -40,7 +40,7 @@ The work is keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence).
 2.2M to roughly 24,000.
 
 All distance computation runs in EPSG:26986 (NAD83 / Massachusetts Mainland, in
-metres) rather than WGS84 degrees, which would bias placement east-west at
+meters) rather than WGS84 degrees, which would bias placement east-west at
 Boston's latitude.
 
 ### Placing a vehicle on its route
@@ -71,7 +71,7 @@ predicted departure against scheduled departure for a vehicle on layover. They
 answer different questions (ours is how late a vehicle is right now, theirs is
 how late it will be on arrival), so they diverge most at peak service.
 
-Measured on Wednesday 16 September 2026, thinned to one observation per vehicle
+Measured on Wednesday, September 16, 2026, thinned to one observation per vehicle
 per minute:
 
 | | Morning peak (07:00–09:10) | Overnight (00:17–05:00) |
@@ -82,6 +82,39 @@ per minute:
 | p10 / p90 | −12s / +52s | −12s / +42s |
 | Within 60s of feed | 90.0% | 93.0% |
 | Within 120s of feed | 96.6% | 98.1% |
+
+### By mode
+
+The fleet figure is mostly buses. Over Monday, September 28, 2026, a full
+service day thinned the same way:
+
+| | Subway | Bus | Light rail | Commuter rail |
+|---|---:|---:|---:|---:|
+| Paired observations | 37,650 | 407,297 | 2,378 | 32,296 |
+| Distinct vehicles | 63 | 760 | 5 | 70 |
+| Median divergence | +2s | +8s | +4s | +18s |
+| p10 / p90 | −7s / +42s | −15s / +43s | −4s / +53s | −18s / +136s |
+| Within 60s of feed | 95.0% | 91.4% | 91.5% | 67.9% |
+| Within 60s, between stops only | 93.3% | 85.5% | 90.4% | 58.7% |
+
+Light rail is the Mattapan line alone; the Green Line runs as added trips
+with no timetable (see [Known limitations](#known-limitations)). Ferries
+(13 boats, 49% within 60s) are left out: boats don't follow the drawn line.
+
+Commuter rail disagrees because the MBTA's predictions there run optimistic
+between stations, and its stations are far apart. Scoring both figures
+against when trains actually arrived (9,510 commuter rail arrivals, September
+24–29) puts the MBTA's prediction 45s early on average when a train is
+five minutes out and 82s early at ten; ours is within 11s of unbiased at
+both. The two figures are compared at the same moment, so that gap is the
+divergence. Neither is simply better: the MBTA's mean error is lower inside
+five minutes (54s against 68s), ours beyond ten (86s against 92s), and on
+stopped trains they agree 99% of the time. The lines with the closest
+stations agree best (Needham 82%, Fairmount 80%), the long stretches to Fall
+River least (55%). The same optimism shows on every mode, but a bus is never
+more than a minute or two from its next stop, so it stays small there. The
+horizon-by-horizon tables are in
+[docs/validation.md](docs/validation.md#agreement-by-mode).
 
 The comparison has caught three estimator bugs so far. Scoring the same
 observations before and after the two most recent fixes, the dwell hold and

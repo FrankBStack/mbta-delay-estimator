@@ -71,7 +71,7 @@ describe("niceTicks", () => {
 });
 
 describe("textOn", () => {
-  it("puts dark text on the light route colours", () => {
+  it("puts dark text on the light route colors", () => {
     expect(textOn("#FFC72C")).toBe("#111"); // bus yellow
     expect(textOn("#7C878E")).toBe("#111"); // Silver Line
     expect(textOn("#ED8B00")).toBe("#111"); // Orange Line
@@ -83,7 +83,7 @@ describe("textOn", () => {
     expect(textOn("#DA291C")).toBe("#fff"); // Red Line
   });
 
-  it("falls back to white for a colour it can't read", () => {
+  it("falls back to white for a color it can't read", () => {
     expect(textOn(undefined)).toBe("#fff");
   });
 });

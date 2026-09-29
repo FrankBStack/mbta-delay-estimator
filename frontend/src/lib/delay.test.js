@@ -15,7 +15,7 @@ describe("delayColorExpression", () => {
   const expr = delayColorExpression();
   const step = expr[2];
 
-  it("gates on has_delay and falls back to the unknown colour", () => {
+  it("gates on has_delay and falls back to the unknown color", () => {
     expect(expr[0]).toBe("case");
     expect(expr[1]).toEqual(["get", "has_delay"]);
     expect(expr[3]).toBe(UNKNOWN_COLOR);
@@ -28,7 +28,7 @@ describe("delayColorExpression", () => {
   });
 
   it("emits one stop per bucket boundary", () => {
-    // fallback colour + a (threshold, colour) pair for every bucket but the last
+    // fallback color + a (threshold, color) pair for every bucket but the last
     expect(step.length).toBe(3 + (DELAY_BUCKETS.length - 1) * 2);
     expect(step[2]).toBe(DELAY_BUCKETS[0].color);
   });
@@ -72,7 +72,7 @@ describe("delayBucketExpression", () => {
 });
 
 describe("delayColor", () => {
-  it("returns the unknown colour when there is no value", () => {
+  it("returns the unknown color when there is no value", () => {
     expect(delayColor(null)).toBe(UNKNOWN_COLOR);
     expect(delayColor(undefined)).toBe(UNKNOWN_COLOR);
   });
@@ -166,7 +166,7 @@ describe("noDelayLabel", () => {
     expect(noDelayLabel("unknown_trip")).toBe("Trip not in the loaded timetable");
   });
 
-  it("falls back for a missing or unrecognised code", () => {
+  it("falls back for a missing or unrecognized code", () => {
     expect(noDelayLabel(null)).toBe("No timetable");
     expect(noDelayLabel(undefined)).toBe("No timetable");
     expect(noDelayLabel("something-new")).toBe("No timetable");

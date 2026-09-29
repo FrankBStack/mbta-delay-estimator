@@ -226,7 +226,7 @@ export default function DelayByRouteChart({
                           : "transparent"
                     }
                   />
-                  {/* the MBTA's own route colours: yellow bus, purple commuter rail */}
+                  {/* the MBTA's own route colors: yellow bus, purple commuter rail */}
                   <rect
                     x={2}
                     y={y + 5}
@@ -343,7 +343,7 @@ export function niceTicks(lo, hi) {
   return out.sort((a, b) => a - b);
 }
 
-// whichever of black or white text reads better on a route's colour
+// whichever of black or white text reads better on a route's color
 export function textOn(hex) {
   const n = parseInt(String(hex).replace("#", ""), 16);
   if (Number.isNaN(n)) return "#fff";
