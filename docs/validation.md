@@ -257,6 +257,25 @@ Mean absolute error, with bias in brackets. On every mode the feed is more
 accurate inside five minutes and biased early; ours is noisier close in
 (position placement and the poll interval) and less biased further out.
 
+### The Green Line, on matched slots
+
+Green Line trains got a figure on September 30 (see
+[design.md](design.md#added-trips)): each is measured against the scheduled
+slot it most nearly runs as. Over the first twelve hours, paired arrivals
+where both estimates existed:
+
+| Minutes out | Paired | MBTA mean abs error | MBTA bias | Position mean abs error | Position bias |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3,481 | 28s | −22s | 46s | +2s |
+| 2 | 3,386 | 48s | −35s | 59s | −14s |
+| 5 | 2,748 | 84s | −62s | 84s | −32s |
+| 10 | 1,750 | 108s | −82s | 100s | −31s |
+
+The same shape as the other modes, which is the point: a figure read off a
+matched slot behaves like one read off the train's own timetable. Agreement
+with the feed over the three hours to 11:30 AM: 90.1% within 60s, median
++2s, 5,112 observations.
+
 By line, agreement tracks station spacing. The 24 hours to 1:30 PM on September 29:
 
 | Line | Compared | Mean divergence | Within 60s |

@@ -103,9 +103,12 @@ service day thinned the same way:
 
 Light rail here is the Mattapan line alone: the Green Line runs as added
 trips, which since September 30 are measured against the nearest scheduled
-slot (see [Known limitations](#known-limitations)) and were not yet in this
-table. Ferries (13 boats, 49% within 60s) are left out: boats don't follow
-the drawn line.
+slot (see [Known limitations](#known-limitations)). Over its first morning
+it agreed with the feed 90.1% of the time within 60s, and scored against
+actual arrivals it shows the same shape as the other modes
+([docs/validation.md](docs/validation.md#the-green-line-on-matched-slots)).
+Ferries (13 boats, 49% within 60s) are left out: boats don't follow the
+drawn line.
 
 Commuter rail disagrees because the MBTA's predictions there run optimistic
 between stations, and its stations are far apart. Scoring both figures
