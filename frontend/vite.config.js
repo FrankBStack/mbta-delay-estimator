@@ -18,9 +18,10 @@ export default defineConfig({
     // a deploy only invalidates the small app chunk for returning visitors
     rollupOptions: {
       output: {
-        manualChunks: {
-          maplibre: ["maplibre-gl"],
-          react: ["react", "react-dom"],
+        manualChunks(id) {
+          if (/node_modules[\/]maplibre-gl[\/]/.test(id)) return "maplibre";
+          if (/node_modules[\/](react|react-dom|scheduler)[\/]/.test(id)) return "react";
+          return undefined;
         },
       },
     },
