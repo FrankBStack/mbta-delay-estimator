@@ -47,6 +47,27 @@ minutes late throughout while the feed had it at an hour and forty. With it,
 the count of ten-minute-plus disagreements at peak fell from 72 to 57, below
 the 60 that clock scoring produces, and every gain of the hold stayed.
 
+## Added trips
+
+The realtime feed's trip descriptor can name a trip that is not in the static
+feed, marked `ADDED`. The MBTA does this for every Green Line train, and
+occasionally elsewhere. Such a trip has no timetable, so when a vehicle is
+first seen on one, `MATCH_SQL` in `delay.py` looks at the stop it is at (or
+the feed's predicted time for the stop it is heading to), and among the
+scheduled trips on the same route and direction that serve that stop, picks
+the one whose timetable there is nearest, within an hour; among candidates
+within ten minutes it prefers the one with the most stops, so a full-length
+train is not matched to a short-turn whose timetable ends early. The pairing
+is kept in `added_trip_match` for the trip's life, and the estimator, the
+feed comparison and the arrival scoring all read the matched trip's
+timetable through the vehicle's stop ids. In the first minutes live, the
+median distance from the matched slot at the moment of matching was 48s.
+
+What this measures is deviation from the nearest scheduled slot. On a line
+run by headway that is the defensible single number, but it is blind to a
+train that missed its slot by a whole headway: it reads as the next one, on
+time. A headway measure would see that; it is a different feature.
+
 ## Idle layovers
 
 A vehicle waiting at its origin ahead of departure, or still on its way there,

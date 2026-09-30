@@ -162,7 +162,7 @@ describe("METHOD_LABELS", () => {
 describe("noDelayLabel", () => {
   it("names the cause the API reports", () => {
     expect(noDelayLabel("shuttle")).toBe("Replacement shuttle, no timetable");
-    expect(noDelayLabel("added_trip")).toBe("Unscheduled trip added by the MBTA");
+    expect(noDelayLabel("added_trip")).toBe("Added trip with no scheduled slot near it");
     expect(noDelayLabel("unknown_trip")).toBe("Trip not in the loaded timetable");
   });
 

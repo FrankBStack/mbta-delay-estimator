@@ -94,7 +94,7 @@ export const METHOD_LABELS = {
 // against, which is not the same as failing to place it.
 export const NO_DELAY_LABELS = {
   shuttle: "Replacement shuttle, no timetable",
-  added_trip: "Unscheduled trip added by the MBTA",
+  added_trip: "Added trip with no scheduled slot near it",
   unknown_trip: "Trip not in the loaded timetable",
   no_trip: "Not assigned to a trip",
   no_stop_sequence: "Feed gives no stop to measure against",

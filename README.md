@@ -101,9 +101,11 @@ service day thinned the same way:
 | Within 60s of feed | 95.0% | 91.4% | 91.5% | 67.9% |
 | Within 60s, between stops only | 93.3% | 85.5% | 90.4% | 58.7% |
 
-Light rail is the Mattapan line alone; the Green Line runs as added trips
-with no timetable (see [Known limitations](#known-limitations)). Ferries
-(13 boats, 49% within 60s) are left out: boats don't follow the drawn line.
+Light rail here is the Mattapan line alone: the Green Line runs as added
+trips, which since September 30 are measured against the nearest scheduled
+slot (see [Known limitations](#known-limitations)) and were not yet in this
+table. Ferries (13 boats, 49% within 60s) are left out: boats don't follow
+the drawn line.
 
 Commuter rail disagrees because the MBTA's predictions there run optimistic
 between stations, and its stations are far apart. Scoring both figures
@@ -237,12 +239,16 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 
 ## Known limitations
 
-- Only vehicles on a scheduled trip get a figure. Replacement shuttles and
-  trips the MBTA adds in realtime have no timetable to be late against, and
-  are drawn without one; the map says which case applies. The Green Line is
-  the main case: the MBTA publishes its trains as added trips, so none of
-  them gets a figure and the light rail figures are the Mattapan line
-  alone. With shuttles, about one vehicle in six carries no figure.
+- The Green Line is measured against a slot, not a trip of its own. The MBTA
+  publishes every Green Line train as an added trip with no timetable, so
+  when one is first seen it is pinned to the scheduled trip on its branch
+  and direction whose timetable is nearest at that stop, and the estimator
+  reads that timetable from then on; the vehicle card says "Nearest
+  scheduled slot" when that is the case. A train that crawls after leaving
+  the terminal reads late correctly; one that missed its slot by a whole
+  headway is matched to the next slot and reads as on time. Replacement
+  shuttles, and added trips with no slot within an hour, are drawn without a
+  figure and the map says so.
 - Loop routes lose some in-transit vehicles. `ST_LineLocatePoint` resolves a
   point to its first match along the line, so on a leg whose stops run
   backwards along the shape (2.6% of trips) a moving vehicle can't be placed

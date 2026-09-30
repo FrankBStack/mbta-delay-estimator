@@ -63,6 +63,14 @@ export default function VehicleCard({ vehicle, onClose }) {
         <dd>{formatSigned(p.divergence_s)}</dd>
         <dt>Placed by</dt>
         <dd>{METHOD_LABELS[p.method] ?? noDelayLabel(p.no_delay_reason)}</dd>
+        {p.slot_matched && (
+          <>
+            <dt>Timetable</dt>
+            {/* an added trip has none of its own; both figures read the
+                scheduled slot it most nearly runs as */}
+            <dd>Nearest scheduled slot</dd>
+          </>
+        )}
         <dt>Confidence</dt>
         <dd className={`conf conf-${p.confidence ?? "none"}`}>
           {p.confidence ?? "—"}
