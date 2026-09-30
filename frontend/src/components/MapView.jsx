@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import { formatDelay, noDelayLabel } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 import { bounds } from "../lib/routes.js";
+import { STALE_AFTER_S, formatAge } from "../lib/status.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 // Mirrors the phone layout in index.css: the sheet opens over this share of
@@ -119,7 +120,11 @@ export default function MapView({
           "symbol-sort-key": ["case", ["get", "is_rail"], 2, 1],
         },
         paint: {
-          "icon-opacity": ["case", ["get", "has_delay"], 0.95, 0.75],
+          // a vehicle the feed has stopped reporting fades rather than
+          // sitting there looking live
+          "icon-opacity": [
+            "case", ["get", "stale"], 0.3, ["get", "has_delay"], 0.95, 0.75,
+          ],
         },
       });
 
@@ -205,12 +210,14 @@ export default function MapView({
         to,
         start: moved ? now : existing.start,
         props: f.properties,
+        reportedMs: Date.parse(f.properties.ts),
       });
     }
     tracks.current = next;
 
     const render = () => {
       const t = performance.now();
+      const staleBefore = Date.now() - STALE_AFTER_S * 1000;
       const features = [];
       let animating = false;
       for (const [id, track] of tracks.current) {
@@ -226,6 +233,7 @@ export default function MapView({
             has_bearing: bearing !== null && bearing !== undefined,
             bearing: bearing ?? 0,
             is_rail: route_type === 0 || route_type === 1 || route_type === 2,
+            stale: track.reportedMs < staleBefore,
           },
         });
       }
@@ -327,6 +335,14 @@ function tooltip(p) {
       ? noDelayLabel(p.no_delay_reason)
       : formatDelay(p.computed_delay_s);
   el.append(title, headsign, delay);
+  if (p.stale) {
+    const age = document.createElement("div");
+    age.className = "muted";
+    age.textContent = `Last reported ${formatAge(
+      Math.round((Date.now() - Date.parse(p.ts)) / 1000)
+    )} ago`;
+    el.append(age);
+  }
   return el;
 }
 

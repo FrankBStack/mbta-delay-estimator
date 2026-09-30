@@ -1,7 +1,32 @@
 // What the page should say about the health of its data, and how hard to poll.
 
-export const POLL_STEPS_MS = [5000, 15000, 30000];
+export const POLL_STEPS_MS = [15000, 30000, 60000];
 export const STALE_AFTER_S = 90;
+
+// The poller writes every 15s and the API caches for 5s, so asking more often
+// only downloads the same positions again. Aim just after the next update is
+// due; if the answer hasn't moved yet, look again shortly.
+export const FEED_INTERVAL_MS = 15000;
+const FEED_SETTLE_MS = 4000;
+const RECHECK_MS = 5000;
+const MIN_POLL_MS = 3000;
+
+export function newestTs(vehicles) {
+  let newest = null;
+  for (const f of vehicles?.features ?? []) {
+    const t = Date.parse(f.properties.ts);
+    if (!Number.isNaN(t) && (newest === null || t > newest)) newest = t;
+  }
+  return newest;
+}
+
+export function nextVehicleDelay(newestMs, prevNewestMs, nowMs) {
+  if (newestMs === null) return POLL_STEPS_MS[0];
+  if (newestMs === prevNewestMs) return RECHECK_MS;
+  const due = newestMs + FEED_INTERVAL_MS + FEED_SETTLE_MS - nowMs;
+  // clamped so a visitor's wrong clock can't stall or hammer the poll
+  return Math.min(Math.max(due, MIN_POLL_MS), FEED_INTERVAL_MS + FEED_SETTLE_MS);
+}
 
 // Back off while requests fail so a struggling server isn't hammered by every
 // open tab; snap back to the fast cadence on the first success.

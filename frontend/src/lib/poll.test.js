@@ -20,6 +20,23 @@ afterEach(() => {
 });
 
 describe("startPolling", () => {
+  it("does not poll while the tab is hidden", async () => {
+    vi.useFakeTimers();
+    const doc = fakeDocument();
+    const tick = vi.fn(async () => 1000);
+    const stop = startPolling(tick, doc);
+    await vi.advanceTimersByTimeAsync(0);
+    doc.hide();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(tick).toHaveBeenCalledTimes(2); // the one already scheduled runs
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(tick).toHaveBeenCalledTimes(2); // then nothing
+    doc.show();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tick).toHaveBeenCalledTimes(3);
+    stop();
+  });
+
   it("runs now and again after the delay tick returns", async () => {
     vi.useFakeTimers();
     const tick = vi.fn(async () => 5000);

@@ -1,6 +1,6 @@
 // Runs tick now, then again after whatever delay it returns, until the
-// returned function stops it. Browsers slow a hidden tab's timers to as little
-// as once a minute, so coming back to the tab runs tick at once.
+// returned function stops it. A hidden tab doesn't poll at all; coming back
+// runs tick at once.
 export function startPolling(tick, doc = globalThis.document) {
   let alive = true;
   let running = false;
@@ -17,7 +17,7 @@ export function startPolling(tick, doc = globalThis.document) {
     } finally {
       running = false;
     }
-    if (alive) timer = setTimeout(run, delay);
+    if (alive && doc?.visibilityState !== "hidden") timer = setTimeout(run, delay);
   };
 
   const onVisible = () => {

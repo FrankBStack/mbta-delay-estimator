@@ -14,7 +14,9 @@ import {
   STALE_AFTER_S,
   describeStatus,
   keepLastGood,
+  newestTs,
   nextDelay,
+  nextVehicleDelay,
 } from "./lib/status.js";
 
 const ANALYTICS_POLL_MS = 30000;
@@ -86,15 +88,15 @@ export default function App() {
     api.routes().then(setRoutes, () => {});
   }, []);
 
-  // live poll, backing off while it fails
+  // live poll, paced to the feed's own updates, backing off while it fails
   useEffect(() => {
     let delay = POLL_STEPS_MS[0];
     let failures = 0;
+    let newest = null;
     // holding the last good positions only makes sense within one filter;
     // the first answer for a new filter replaces the old set outright
     let first = true;
     return startPolling(async (alive) => {
-      let ok = false;
       try {
         const { routeId: id, routeType: type } = filters.current;
         const v = await api.vehicles(id ? { route_id: id } : { route_type: type });
@@ -107,13 +109,15 @@ export default function App() {
         first = false;
         setError(null);
         failures = 0;
-        ok = true;
+        const n = newestTs(v);
+        delay = nextVehicleDelay(n, newest, Date.now());
+        newest = n;
       } catch (e) {
         failures += 1;
         if (alive() && failures >= ERROR_AFTER_FAILURES) setError(e.message);
+        delay = nextDelay(delay, false);
       }
       if (alive()) setLoading(false);
-      delay = nextDelay(delay, ok);
       return delay;
     });
   }, [routeType, routeId]);
