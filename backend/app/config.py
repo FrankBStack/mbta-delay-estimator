@@ -61,6 +61,10 @@ ENABLE_DOCS = _bool("ENABLE_DOCS", True)
 DB_POOL_MIN = _int("DB_POOL_MIN", 2)
 DB_POOL_MAX = _int("DB_POOL_MAX", 10)
 
+# A request's query is cancelled past this. Only applied when the process is
+# API-only: the in-process poller shares the pool and its passes run longer.
+API_STATEMENT_TIMEOUT_S = _int("API_STATEMENT_TIMEOUT_S", 15)
+
 # Read endpoints can't be fresher than the feed anyway, so a few seconds of
 # cache decouples database load from request volume.
 CACHE_TTL_S = _int("CACHE_TTL_S", 5)

@@ -6,10 +6,12 @@ from .. import cache, db
 
 router = APIRouter(prefix="/api", tags=["vehicles"])
 
+# a vehicle that hasn't reported in this long has left the feed
+MAX_AGE_S = 300
+
 
 @router.get("/vehicles")
 async def vehicles(
-    max_age_s: int = Query(300, ge=30, le=3600),
     route_id: str | None = None,
     route_type: int | None = Query(None, ge=0, le=7),
 ) -> dict[str, Any]:
@@ -19,14 +21,12 @@ async def vehicles(
     the map, just without a number attached.
     """
     return await cache.get_or_set(
-        ("vehicles", max_age_s, route_id, route_type),
-        lambda: _vehicles(max_age_s, route_id, route_type),
+        ("vehicles", route_id, route_type),
+        lambda: _vehicles(route_id, route_type),
     )
 
 
-async def _vehicles(
-    max_age_s: int, route_id: str | None, route_type: int | None
-) -> dict[str, Any]:
+async def _vehicles(route_id: str | None, route_type: int | None) -> dict[str, Any]:
     rows = await db.pool().fetch(
         """
         WITH latest AS (
@@ -66,7 +66,7 @@ async def _vehicles(
         WHERE ($2::text IS NULL OR l.route_id = $2::text)
           AND ($3::int  IS NULL OR r.route_type = $3::int)
         """,
-        str(max_age_s),
+        str(MAX_AGE_S),
         route_id,
         route_type,
     )

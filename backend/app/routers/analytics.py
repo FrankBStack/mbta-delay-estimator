@@ -10,7 +10,7 @@ about lateness and drags a fleet median toward "on time".
 """
 
 import shutil
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 
@@ -18,6 +18,12 @@ from .. import cache, db
 from ..services import realtime
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+
+# Only the windows the page offers. Every distinct value is a separate cache
+# key and a separate scan of the window, and a day's worth takes ten seconds
+# or more on the production box, so the choice is not left to the caller.
+Window = Literal[15, 60, 180]
+MIN_OBSERVATIONS = 3
 
 CONFIDENCE_FILTER = (
     "d.confidence = ANY($2::text[])"
@@ -31,14 +37,13 @@ def _levels(include_low: bool) -> list[str]:
 
 @router.get("/delay-by-route")
 async def delay_by_route(
-    minutes: int = Query(60, ge=5, le=1440),
+    minutes: Window = 60,
     route_type: int | None = Query(None, ge=0, le=7),
-    min_observations: int = Query(3, ge=1, le=1000),
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
     return await cache.get_or_set(
-        ("delay-by-route", minutes, route_type, min_observations, include_low_confidence),
-        lambda: _delay_by_route(minutes, route_type, min_observations, include_low_confidence),
+        ("delay-by-route", minutes, route_type, include_low_confidence),
+        lambda: _delay_by_route(minutes, route_type, MIN_OBSERVATIONS, include_low_confidence),
         ttl_s=ANALYTICS_TTL_S,
     )
 
@@ -106,7 +111,7 @@ async def _delay_by_route(
 
 @router.get("/divergence")
 async def divergence(
-    minutes: int = Query(60, ge=5, le=1440),
+    minutes: Window = 60,
     route_type: int | None = Query(None, ge=0, le=7),
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
@@ -151,16 +156,19 @@ THINNED = f"""
 async def _divergence(
     minutes: int, route_type: int | None, include_low_confidence: bool
 ) -> dict[str, Any]:
-    row = await db.pool().fetchrow(
+    # one pass over the window: the grand total and the per-method rows come
+    # from the same grouping sets, so the thinned set is built once
+    rows = await db.pool().fetch(
         f"""
         WITH d AS ({THINNED})
-        SELECT count(*)                                          AS observations,
+        SELECT GROUPING(d.method) = 1                              AS total,
+               d.method,
+               count(*)                                          AS observations,
                count(*) FILTER (WHERE d.divergence_s IS NOT NULL) AS compared,
                round(avg(d.computed_delay_s))::int                AS mean_computed_s,
-               round(avg(d.feed_delay_s) FILTER (WHERE d.feed_delay_s IS NOT NULL))::int
-                                                                  AS mean_feed_s,
-               round(avg(d.divergence_s) FILTER (WHERE d.divergence_s IS NOT NULL))::int
-                                                                  AS mean_divergence_s,
+               round(avg(d.feed_delay_s))::int                    AS mean_feed_s,
+               round(avg(d.divergence_s))::int                    AS mean_divergence_s,
+               round(avg(abs(d.divergence_s)))::int               AS mean_abs_divergence_s,
                round(percentile_cont(0.5) WITHIN GROUP (ORDER BY d.divergence_s))::int
                                                                   AS median_divergence_s,
                round(stddev_pop(d.divergence_s))::int             AS stddev_divergence_s,
@@ -170,34 +178,26 @@ async def _divergence(
                                                                   AS p90_divergence_s,
                round(corr(d.computed_delay_s, d.feed_delay_s)::numeric, 4) AS correlation,
                count(*) FILTER (WHERE abs(d.divergence_s) <= 60)  AS within_60s,
-               count(*) FILTER (WHERE abs(d.divergence_s) <= 120) AS within_120s
-        FROM d
-        """,
-        str(minutes),
-        _levels(include_low_confidence),
-        route_type,
-    )
-
-    by_method = await db.pool().fetch(
-        f"""
-        WITH d AS ({THINNED})
-        SELECT d.method,
-               count(*)                                           AS observations,
-               round(avg(d.divergence_s) FILTER (WHERE d.divergence_s IS NOT NULL))::int
-                                                                  AS mean_divergence_s,
-               round(avg(abs(d.divergence_s)) FILTER (WHERE d.divergence_s IS NOT NULL))::int
-                                                                  AS mean_abs_divergence_s,
+               count(*) FILTER (WHERE abs(d.divergence_s) <= 120) AS within_120s,
                round(avg(d.snap_error_m)::numeric, 1)             AS mean_snap_error_m
         FROM d
-        GROUP BY d.method
-        ORDER BY count(*) DESC
+        GROUP BY GROUPING SETS ((), (d.method))
+        ORDER BY GROUPING(d.method) DESC, count(*) DESC
         """,
         str(minutes),
         _levels(include_low_confidence),
         route_type,
     )
 
-    result = dict(row) if row else {}
+    total = rows[0] if rows and rows[0]["total"] else None
+    result = {
+        k: total[k] for k in (
+            "observations", "compared", "mean_computed_s", "mean_feed_s",
+            "mean_divergence_s", "median_divergence_s", "stddev_divergence_s",
+            "p10_divergence_s", "p90_divergence_s", "correlation",
+            "within_60s", "within_120s",
+        )
+    } if total else {}
     compared = result.get("compared") or 0
     result["pct_within_60s"] = (
         round(100.0 * (result.get("within_60s") or 0) / compared, 1) if compared else None
@@ -208,14 +208,22 @@ async def _divergence(
     corr = result.get("correlation")
     result["correlation"] = float(corr) if corr is not None else None
     result["window_minutes"] = minutes
-    result["by_method"] = [dict(m) for m in by_method]
+    result["by_method"] = [
+        {
+            k: r[k] for k in (
+                "method", "observations", "mean_divergence_s",
+                "mean_abs_divergence_s", "mean_snap_error_m",
+            )
+        }
+        for r in rows if not r["total"]
+    ]
     return result
 
 
 @router.get("/timeline")
 async def timeline(
-    minutes: int = Query(180, ge=15, le=1440),
-    bucket_minutes: int = Query(5, ge=1, le=60),
+    minutes: Window = 180,
+    bucket_minutes: Literal[5, 15, 60] = 5,
     route_id: str | None = None,
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:

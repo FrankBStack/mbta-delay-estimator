@@ -33,7 +33,7 @@ async def test_no_delay_reason_names_the_cause(conn, monkeypatch):
     ids = [r["id"] for r in await conn.fetch("SELECT id FROM vehicle_position")]
     await delay.compute(conn, ids)
 
-    out = await vehicles._vehicles(300, None, None)
+    out = await vehicles._vehicles(None, None)
     reasons = {
         f["properties"]["vehicle_id"]: f["properties"]["no_delay_reason"] for f in out["features"]
     }

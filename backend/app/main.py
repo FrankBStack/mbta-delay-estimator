@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
-from .config import CORS_ORIGINS, ENABLE_DOCS, RUN_POLLER
+from .config import API_STATEMENT_TIMEOUT_S, CORS_ORIGINS, ENABLE_DOCS, RUN_POLLER
 from .routers import analytics, routes, vehicles
 from .services import realtime, scoring
 
@@ -24,7 +24,7 @@ log = logging.getLogger("tracker")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await db.connect()
+    await db.connect(statement_timeout_s=None if RUN_POLLER else API_STATEMENT_TIMEOUT_S)
     await db.ensure_realtime_schema()
 
     if not await db.pool().fetchval("SELECT count(*) FROM trip_stop_offset"):

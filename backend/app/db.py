@@ -11,16 +11,25 @@ REALTIME_SCHEMA_PATH = pathlib.Path(__file__).with_name("schema_realtime.sql")
 SCHEMA_LOCK_TIMEOUT_S = 30
 
 
-async def connect(min_size: int = DB_POOL_MIN, max_size: int = DB_POOL_MAX) -> asyncpg.Pool:
+async def connect(
+    min_size: int = DB_POOL_MIN,
+    max_size: int = DB_POOL_MAX,
+    statement_timeout_s: float | None = None,
+) -> asyncpg.Pool:
+    """statement_timeout_s bounds every query on the pool; the API sets it so
+    one slow request can't hold a connection for long. The poller, backfill
+    and load leave it off (scoring sets its own inside its transaction)."""
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(
-            DATABASE_URL,
-            min_size=min_size,
-            max_size=max_size,
+        settings = {
             # otherwise a query outlives its process: the server only notices a
             # vanished client when it tries to reply
-            server_settings={"client_connection_check_interval": "10s"},
+            "client_connection_check_interval": "10s",
+        }
+        if statement_timeout_s:
+            settings["statement_timeout"] = str(int(statement_timeout_s * 1000))
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL, min_size=min_size, max_size=max_size, server_settings=settings
         )
     return _pool
 
@@ -54,6 +63,8 @@ async def ensure_realtime_schema() -> None:
     async with pool().acquire() as conn:
         try:
             async with conn.transaction():
+                # the lock timeout is the bound here, not the API's query timeout
+                await conn.execute("SET LOCAL statement_timeout = 0")
                 await conn.execute(f"SET LOCAL lock_timeout = '{SCHEMA_LOCK_TIMEOUT_S}s'")
                 await conn.execute(REALTIME_SCHEMA_PATH.read_text())
         except asyncpg.LockNotAvailableError as exc:
