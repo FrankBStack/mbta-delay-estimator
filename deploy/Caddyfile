@@ -1,13 +1,27 @@
 {$DOMAIN} {
-    encode gzip
+    encode zstd gzip
 
     log {
         output stdout
     }
 
-    # browsers rewrite any http:// URL for this host to https before fetching,
-    # which covers any redirect a backend builds with the wrong scheme
-    header Strict-Transport-Security "max-age=31536000"
+    header {
+        # browsers rewrite any http:// URL for this host to https before
+        # fetching, which covers any redirect a backend builds with the wrong
+        # scheme
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "geolocation=(), camera=(), microphone=()"
+        -Server
+    }
+
+    # The page loads its own bundle, Google Fonts, and the CARTO basemap
+    # (style, sprite, glyphs and tiles, all fetched, hence connect-src);
+    # MapLibre runs its workers from blob URLs. /docs is Swagger from a CDN
+    # and is left out.
+    @page not path /docs* /redoc*
+    header @page Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; worker-src blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
 
     # retry the upstream dial while the web container is being recreated,
     # instead of answering 502 for the few seconds it is down
