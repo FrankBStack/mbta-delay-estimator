@@ -20,6 +20,7 @@ services:
   poller:
     environment:
       <<: *prod-env
+      HEARTBEAT_URL: ${HEARTBEAT_URL:-}
 
   load:
     environment:

@@ -20,6 +20,7 @@ from .. import db
 from ..config import (
     AGENCY_TZ,
     BACKFILL_HOURS,
+    HEARTBEAT_URL,
     POLL_INTERVAL_S,
     PROJECTED_SRID,
     RETENTION_HOURS,
@@ -407,8 +408,21 @@ async def poll_once(client: httpx.AsyncClient) -> dict[str, Any]:
     return STATE
 
 
+HEARTBEAT_PING_INTERVAL_S = 60
+
+
+async def ping(client: httpx.AsyncClient) -> None:
+    """Tell the dead-man's switch a poll succeeded. Best effort: a failure
+    here must never look like a failed poll."""
+    try:
+        await client.get(HEARTBEAT_URL, timeout=5.0)
+    except Exception as exc:
+        log.warning("heartbeat ping failed: %s", exc)
+
+
 async def run_forever() -> None:
     prune_interval = dt.timedelta(hours=1)
+    last_ping: float | None = None
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         while True:
             started = asyncio.get_running_loop().time()
@@ -420,6 +434,11 @@ async def run_forever() -> None:
                     STATE["positions_inserted"],
                     STATE["delays_computed"],
                 )
+                if HEARTBEAT_URL and (
+                    last_ping is None or started - last_ping >= HEARTBEAT_PING_INTERVAL_S
+                ):
+                    await ping(client)
+                    last_ping = started
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

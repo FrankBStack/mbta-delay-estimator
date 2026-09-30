@@ -1,14 +1,22 @@
 import asyncio
 import contextlib
+import datetime as dt
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import db
-from .config import API_STATEMENT_TIMEOUT_S, CORS_ORIGINS, ENABLE_DOCS, RUN_POLLER
+from .config import (
+    API_STATEMENT_TIMEOUT_S,
+    CORS_ORIGINS,
+    ENABLE_DOCS,
+    READY_MAX_POLL_AGE_S,
+    RUN_POLLER,
+)
 from .routers import analytics, routes, vehicles
 from .services import realtime, scoring
 
@@ -85,7 +93,27 @@ async def root() -> dict[str, str | None]:
 
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
-    """Load-balancer probe. /api/analytics/health counts rows and is far too
-    expensive to poll."""
+    """Container probe: this process can reach the database. Says nothing
+    about the poller, so a fresh stack comes up before the first poll."""
     await db.pool().fetchval("SELECT 1")
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    """Uptime-monitor probe: 503 unless the poller has written a successful
+    poll recently. /api/analytics/health counts rows and is far too expensive
+    to poll."""
+    async with db.pool().acquire() as conn:
+        poller = await realtime.read_heartbeat(conn) or {}
+    last_poll = poller.get("last_poll")
+    age = (
+        (dt.datetime.now(dt.UTC) - dt.datetime.fromisoformat(last_poll)).total_seconds()
+        if last_poll else None
+    )
+    if age is None or age > READY_MAX_POLL_AGE_S:
+        return JSONResponse(
+            {"status": "stale", "last_poll": last_poll, "last_error": poller.get("last_error")},
+            status_code=503,
+        )
+    return JSONResponse({"status": "ok", "last_poll_age_s": round(age)})

@@ -65,6 +65,13 @@ DB_POOL_MAX = _int("DB_POOL_MAX", 10)
 # API-only: the in-process poller shares the pool and its passes run longer.
 API_STATEMENT_TIMEOUT_S = _int("API_STATEMENT_TIMEOUT_S", 15)
 
+# /readyz answers 503 once the poller's last successful poll is older than this
+READY_MAX_POLL_AGE_S = _int("READY_MAX_POLL_AGE_S", 180)
+
+# Pinged after a successful poll, at most once a minute, so a dead-man's
+# switch (healthchecks.io or similar) can raise the alarm when the poller stops.
+HEARTBEAT_URL = os.getenv("HEARTBEAT_URL") or None
+
 # Read endpoints can't be fresher than the feed anyway, so a few seconds of
 # cache decouples database load from request volume.
 CACHE_TTL_S = _int("CACHE_TTL_S", 5)
