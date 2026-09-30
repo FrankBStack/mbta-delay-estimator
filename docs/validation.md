@@ -1,7 +1,7 @@
 # Validation against the MBTA's predictions
 
 How the position-derived delay estimator was validated against the MBTA's own
-predictions, including a bug the comparison caught. Headline figures are in the
+predictions, including the bugs the comparison caught. Headline figures are in the
 main README; this is the full breakdown.
 
 Since the MBTA publishes no delay field, its column here is derived as
@@ -10,9 +10,9 @@ figures answer different questions (ours is how late a vehicle is right now,
 theirs is how late it will be on arrival), so the interesting part is where and
 why they diverge.
 
-The tables below predate two corrections to the estimator, so treat their exact
-figures as approximate; they're kept because they document how it was debugged.
-The first fixed the feed join (`with_feed` in `app/services/delay.py`), which
+The September tables are measured after two corrections to the estimator;
+the July tables at the end predate them and are kept because they document
+how it was debugged. The first fixed the feed join (`with_feed` in `app/services/delay.py`), which
 took the newest prediction for a stop rather than the contemporaneous one.
 Re-measured after that over a weekday evening peak: correlation 0.9935, mean
 divergence +19s, σ 50s, 88.8% within 60s (87,461 compared observations).
@@ -218,7 +218,14 @@ figures were scored against actual arrivals (`arrival_score`, see
 the MBTA's prediction and of the arrival our delay implied, at the moments the
 countdown read 1, 2, 5, 10, 15 and 20 minutes. Error is estimate minus
 actual, so negative means the train came later than the estimate said.
-637,602 arrivals scored September 24–29, 2026, 9,510 of them commuter rail:
+637,602 arrivals scored September 24–29, 2026, 9,510 of them commuter rail.
+Scoring produced nothing from September 25 11:04 UTC to September 27 21:56
+UTC while a pass was stalled, so this is about three and a half days of
+data. Until September 30 the position estimate was paired with the nearest
+observation within 45 seconds either side of the prediction, which at the
+one- and two-minute horizons could be the arrival itself; those two rows
+flatter the position column. From five minutes out the pairing could not
+reach the arrival, and those figures stand.
 
 | Minutes out | MBTA mean abs error | MBTA bias | Position mean abs error | Position bias |
 |---:|---:|---:|---:|---:|

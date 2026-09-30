@@ -433,6 +433,11 @@ export default function App() {
             read from the feed. The MBTA publishes no delay field, so its column
             is derived from its predicted arrival times.
           </p>
+          <p className="footnote">
+            Data from the MBTA's GTFS and GTFS-realtime feeds, provided by
+            MassDOT. Not affiliated with the MBTA or MassDOT.{" "}
+            <a href="https://github.com/FrankBStack/mbta-delay-estimator">Source</a>.
+          </p>
         </aside>
       </main>
     </div>

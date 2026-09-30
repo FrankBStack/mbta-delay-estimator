@@ -1,10 +1,10 @@
 """Compute where each stop sits along its trip's shape.
 
 GTFS has a field for this (shape_dist_traveled) but the MBTA leaves it blank on
-all 393,561 shape points, so it is derived here with ST_LineLocatePoint.
+every shape point, so it is derived here with ST_LineLocatePoint.
 
-Keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence): 87k trips
-share 1,156 shapes, so this is ~24k geometry operations instead of 2.2M.
+Keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence): 122k trips
+share 1,147 shapes, so this is ~24k geometry operations instead of 3.2M.
 
     python -m app.offsets
 """

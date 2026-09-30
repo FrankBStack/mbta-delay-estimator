@@ -688,6 +688,10 @@ main {
   line-height: 1.5;
   padding: 0 2px;
 }
+.footnote a {
+  color: inherit;
+  text-decoration: underline;
+}
 
 /* MapLibre's own chrome, toned down to match. */
 .maplibregl-ctrl-attrib {

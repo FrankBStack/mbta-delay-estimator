@@ -19,13 +19,17 @@ require no API key.
 **Stack:** Python 3.13, FastAPI, asyncpg, PostgreSQL 17 + PostGIS 3.6, React 18,
 MapLibre GL, Vite.
 
+**Data:** MBTA GTFS and GTFS-realtime feeds, provided by MassDOT under its
+[developer license](https://www.mbta.com/developers). This project is not
+affiliated with the MBTA or MassDOT.
+
 ## Deriving delay from position
 
 Two fields are missing from the MBTA's data:
 
 - `TripUpdates` has no `delay` field, only absolute predicted arrival times.
-- `shape_dist_traveled` is empty across all 393,561 shape points, so there is no
-  published measure of how far along a route a given stop sits.
+- `shape_dist_traveled` is empty on every shape point in the feed, so there is
+  no published measure of how far along a route a given stop sits.
 
 The second is the bigger problem: without it there's no way to say "this
 vehicle is between stops 7 and 8, 40% of the way along". `app.offsets` derives
@@ -36,8 +40,8 @@ onto its own shape can be compared with when the schedule expected a vehicle at
 that point.
 
 The work is keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence).
-87,656 trips share only 1,156 shapes, which reduces the geometry operations from
-2.2M to roughly 24,000.
+In the Fall 2026 feed, 122,478 trips share only 1,147 shapes, which reduces the
+geometry operations from 3.2M to roughly 24,000.
 
 All distance computation runs in EPSG:26986 (NAD83 / Massachusetts Mainland, in
 meters) rather than WGS84 degrees, which would bias placement east-west at
@@ -103,13 +107,17 @@ with no timetable (see [Known limitations](#known-limitations)). Ferries
 
 Commuter rail disagrees because the MBTA's predictions there run optimistic
 between stations, and its stations are far apart. Scoring both figures
-against when trains actually arrived (9,510 commuter rail arrivals, September
-24–29) puts the MBTA's prediction 45s early on average when a train is
-five minutes out and 82s early at ten; ours is within 11s of unbiased at
-both. The two figures are compared at the same moment, so that gap is the
-divergence. Neither is simply better: the MBTA's mean error is lower inside
-five minutes (54s against 68s), ours beyond ten (86s against 92s), and on
-stopped trains they agree 99% of the time. The lines with the closest
+against when trains actually arrived (9,510 commuter rail arrivals over
+September 24–29, less a two-and-a-half-day gap while scoring was stalled)
+puts the MBTA's prediction 45s early on average when a train is five minutes
+out and 82s early at ten; ours is within 11s of unbiased at both. The two
+figures are compared at the same moment, so that gap is the divergence.
+Neither is simply better: the MBTA's mean error is lower inside five
+minutes (54s against 68s), ours beyond ten (86s against 92s), and on stopped
+trains they agree 99% of the time. On buses the MBTA's mean error is lower
+at every horizon measured. Ours is the naive forecast, the current delay
+carried to the next stop; the point is how far the MBTA's countdown drifts
+from even that. The lines with the closest
 stations agree best (Needham 82%, Fairmount 80%), the long stretches to Fall
 River least (55%). The same optimism shows on every mode, but a bus is never
 more than a minute or two from its next stop, so it stays small there. The
@@ -137,7 +145,7 @@ and placement method, and the earlier first-stop bug.
 | `GET /api/analytics/timeline` | Both series bucketed over time |
 | `GET /api/analytics/health` | Poller liveness and data volume |
 
-Interactive documentation at `/docs`.
+Interactive documentation at [`/docs`](https://mbta.frankbs.dev/docs).
 
 ## How it fits together
 
@@ -187,16 +195,16 @@ delay until `load` finishes.
 
 ## Running locally
 
-Requires PostgreSQL with PostGIS, Python 3.11+, and Node 22+.
+Requires PostgreSQL with PostGIS, Python 3.13 (3.11 or later works), and
+Node 22+.
 
 ```bash
-brew install postgresql@17 postgis
+brew install postgresql@17 postgis python@3.13
 brew services start postgresql@17
 createdb tracker
-psql -d tracker -c "CREATE EXTENSION postgis;"
 
 cd backend
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env
 .venv/bin/python -m app.gtfs_static     # downloads and loads the feed, ~60s
 .venv/bin/uvicorn app.main:app --port 8010
@@ -231,10 +239,10 @@ commands, the weekly feed reload, and backfilling after an estimator change.
 
 - Only vehicles on a scheduled trip get a figure. Replacement shuttles and
   trips the MBTA adds in realtime have no timetable to be late against, and
-  are drawn without one; the map says which case applies. On a normal day
-  that is a few percent of the fleet, mostly shuttles. During a rail
-  diversion the Green Line can run largely as added trips, and the headline
-  median then under-represents light rail.
+  are drawn without one; the map says which case applies. The Green Line is
+  the main case: the MBTA publishes its trains as added trips, so none of
+  them gets a figure and the light rail figures are the Mattapan line
+  alone. With shuttles, about one vehicle in six carries no figure.
 - Loop routes lose some in-transit vehicles. `ST_LineLocatePoint` resolves a
   point to its first match along the line, so on a leg whose stops run
   backwards along the shape (2.6% of trips) a moving vehicle can't be placed

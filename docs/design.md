@@ -25,7 +25,7 @@ stopped-at and layover observations don't depend on the fraction and are kept.
 
 ## The dwell hold
 
-The MBTA schedules arrival equal to departure at all but 92 of its 2.2M stop
+The MBTA schedules arrival equal to departure at all but 87 of its 3.2M stop
 times, so boarding time is folded into the travel segments. Measured against
 the clock, a vehicle sitting at a stop would read one second later for every
 second it dwells, then appear to catch up along the next leg. `stopped_at`
