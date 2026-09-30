@@ -54,6 +54,8 @@ services:
   poller:
     <<: *backend
     command: python -m app.poller
+    # tini as PID 1, so a stop signal reaches python instead of being ignored
+    init: true
     restart: unless-stopped
 
   web:
@@ -71,6 +73,7 @@ services:
   load:
     <<: *backend
     profiles: [tools]
+    init: true
     command: python -m app.gtfs_static --keep
     volumes:
       - gtfs-cache:/app/.cache

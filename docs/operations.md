@@ -44,8 +44,10 @@ and poller start before the feed has been loaded. nginx serves the built
 frontend and proxies `/api` to the API container on the same origin, so no
 CORS configuration is needed.
 
-CI publishes amd64 and arm64 images on every push to main, so a deploy is
-`docker compose pull && docker compose up -d`; `build` is for local changes.
+`deploy/update.sh` is what the box runs: pull, build with fresh base images,
+restart. `deploy/crontab` is its crontab, with the weekly reload and backup.
+CI also publishes amd64 and arm64 images on every push to main, for a box
+that would rather `docker compose pull` than build.
 
 The schema is in three files. `schema.sql` holds the extension, `gtfs_ts()`
 and `feed_meta`, all idempotent. `schema_static.sql` holds the static tables;

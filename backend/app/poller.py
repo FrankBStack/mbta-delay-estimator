@@ -9,6 +9,7 @@ polls and writes the same rows.
 import asyncio
 import contextlib
 import logging
+import signal
 
 from . import db
 from .services import realtime, scoring
@@ -30,8 +31,14 @@ async def main() -> None:
         log.warning("trip_stop_offset is empty - run `python -m app.gtfs_static` "
                     "first or nothing will have a delay")
     log.info("poller started")
+    loops = asyncio.gather(realtime.run_forever(), scoring.run_forever())
+    # a stop from compose cancels the loops mid-sleep rather than being
+    # ignored until the kill ten seconds later
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        asyncio.get_running_loop().add_signal_handler(sig, loops.cancel)
     try:
-        await asyncio.gather(realtime.run_forever(), scoring.run_forever())
+        with contextlib.suppress(asyncio.CancelledError):
+            await loops
     finally:
         await db.close()
         log.info("shut down")
