@@ -1,19 +1,18 @@
 # Production overlay. Adds Caddy for TLS, takes the password and domain from
-# .env, and trims memory for a 2 GB box.
+# .env, and sizes Postgres for a 6 GB box shared with the API and poller.
 
 x-prod-env: &prod-env
   DATABASE_URL: postgresql://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker
 
 services:
   db:
-    command: postgres -c shared_buffers=256MB -c work_mem=8MB -c maintenance_work_mem=128MB
+    command: postgres -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=256MB
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
 
   api:
     environment:
       <<: *prod-env
-      ENABLE_DOCS: "false"
       DB_POOL_MIN: "1"
       DB_POOL_MAX: "4"
 
