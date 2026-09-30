@@ -1,15 +1,21 @@
 """Ingest filtering and pruning, against the same synthetic route."""
 
+import contextlib
+import types
 from datetime import timedelta
 
+import httpx
+import pytest
 from google.transit import gtfs_realtime_pb2 as gtfs_rt
 
+from app import db
 from app.services import realtime
 from tests.test_delay import SERVICE_DATE, at
 
 
 def vehicles_msg(*vehicles):
     msg = gtfs_rt.FeedMessage()
+    msg.header.gtfs_realtime_version = "2.0"
     msg.header.timestamp = int(at(18240).timestamp())
     for vid, trip_id, seq in vehicles:
         e = msg.entity.add()
@@ -26,6 +32,7 @@ def vehicles_msg(*vehicles):
 
 def updates_msg(trip_id, seqs):
     msg = gtfs_rt.FeedMessage()
+    msg.header.gtfs_realtime_version = "2.0"
     msg.header.timestamp = int(at(18240).timestamp())
     e = msg.entity.add()
     e.id = "u"
@@ -79,3 +86,49 @@ async def test_prune_deletes_in_batches(conn):
         realtime.PRUNE_BATCH = saved
     assert deleted["trip_update"] == 20
     assert await conn.fetchval("SELECT count(*) FROM trip_update") == 1
+
+
+class FeedClient:
+    """Serves one message per feed URL, or raises for it."""
+
+    def __init__(self, **by_url):
+        self.by_url = by_url
+
+    async def get(self, url):
+        msg = self.by_url[url]
+        if isinstance(msg, Exception):
+            raise msg
+        return httpx.Response(
+            200, content=msg.SerializeToString(), request=httpx.Request("GET", url)
+        )
+
+
+@pytest.fixture
+def poll_pool(conn, monkeypatch):
+    @contextlib.asynccontextmanager
+    async def acquire():
+        yield conn
+
+    monkeypatch.setattr(db, "_pool", types.SimpleNamespace(acquire=acquire))
+
+
+async def test_a_trip_updates_outage_still_stores_positions(poll_pool, conn):
+    client = FeedClient(**{
+        realtime.VEHICLE_POSITIONS_URL: vehicles_msg(("v1", "T1", 2)),
+        realtime.TRIP_UPDATES_URL: httpx.ConnectError("no route to host"),
+    })
+    state = await realtime.poll_once(client)
+    assert state["positions_inserted"] == 1
+    assert state["last_error"] is None
+    assert state["trip_updates_error"].startswith("ConnectError")
+    assert await conn.fetchval("SELECT count(*) FROM vehicle_position") == 1
+
+
+async def test_a_vehicle_positions_outage_fails_the_poll(poll_pool, conn):
+    client = FeedClient(**{
+        realtime.VEHICLE_POSITIONS_URL: httpx.ReadTimeout("slow"),
+        realtime.TRIP_UPDATES_URL: updates_msg("T1", [2]),
+    })
+    with pytest.raises(httpx.ReadTimeout):
+        await realtime.poll_once(client)
+    assert await conn.fetchval("SELECT count(*) FROM trip_update") == 0

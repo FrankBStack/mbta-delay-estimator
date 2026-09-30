@@ -36,6 +36,7 @@ _STATUS = {0: "INCOMING_AT", 1: "STOPPED_AT", 2: "IN_TRANSIT_TO"}
 STATE: dict[str, Any] = {
     "last_poll": None,
     "last_error": None,
+    "trip_updates_error": None,
     "feed_timestamp": None,
     "vehicles_seen": 0,
     "positions_inserted": 0,
@@ -348,6 +349,7 @@ def snapshot() -> dict[str, Any]:
         "feed_timestamp": iso(STATE["feed_timestamp"]),
         "vehicles_seen": STATE["vehicles_seen"],
         "last_error": STATE["last_error"],
+        "trip_updates_error": STATE["trip_updates_error"],
         "last_prune": iso(STATE["last_prune"]),
         "last_prune_error": STATE["last_prune_error"],
         "trip_match_rate": STATE["trip_match_rate"],
@@ -379,14 +381,30 @@ async def poll_once(client: httpx.AsyncClient) -> dict[str, Any]:
     vehicles_msg, updates_msg = await asyncio.gather(
         fetch(client, VEHICLE_POSITIONS_URL),
         fetch(client, TRIP_UPDATES_URL),
+        return_exceptions=True,
     )
+    if isinstance(vehicles_msg, BaseException):
+        raise vehicles_msg
+    if isinstance(updates_msg, BaseException):
+        if not isinstance(updates_msg, Exception):
+            raise updates_msg
+        # positions are the map; predictions only add the comparison, so an
+        # outage on that feed alone must not empty the map
+        STATE["trip_updates_error"] = f"{type(updates_msg).__name__}: {updates_msg}"
+        log.warning("trip updates unavailable, storing positions alone: %s",
+                    STATE["trip_updates_error"])
+        updates_msg = None
+    else:
+        STATE["trip_updates_error"] = None
 
     pool = db.pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
             # predictions first, so the delay pass can join against them in the
             # same poll rather than lagging a cycle behind
-            updates = await ingest_trip_updates(conn, updates_msg, wanted_stops(vehicles_msg))
+            updates = 0
+            if updates_msg is not None:
+                updates = await ingest_trip_updates(conn, updates_msg, wanted_stops(vehicles_msg))
             new_ids = await ingest_vehicles(conn, vehicles_msg)
             computed = await delay.compute(conn, new_ids) if new_ids else 0
             if new_ids:
