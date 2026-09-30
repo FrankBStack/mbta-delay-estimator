@@ -9,8 +9,9 @@ excluded from every aggregate. They read as exactly zero, which says nothing
 about lateness and drags a fleet median toward "on time".
 """
 
+import enum
 import shutil
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -22,7 +23,18 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 # Only the windows the page offers. Every distinct value is a separate cache
 # key and a separate scan of the window, and a day's worth takes ten seconds
 # or more on the production box, so the choice is not left to the caller.
-Window = Literal[15, 60, 180]
+class Window(enum.IntEnum):
+    QUARTER_HOUR = 15
+    HOUR = 60
+    THREE_HOURS = 180
+
+
+class Bucket(enum.IntEnum):
+    FIVE_MINUTES = 5
+    QUARTER_HOUR = 15
+    HOUR = 60
+
+
 MIN_OBSERVATIONS = 3
 
 CONFIDENCE_FILTER = (
@@ -37,13 +49,13 @@ def _levels(include_low: bool) -> list[str]:
 
 @router.get("/delay-by-route")
 async def delay_by_route(
-    minutes: Window = 60,
+    minutes: Window = Window.HOUR,
     route_type: int | None = Query(None, ge=0, le=7),
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
     return await cache.get_or_set(
-        ("delay-by-route", minutes, route_type, include_low_confidence),
-        lambda: _delay_by_route(minutes, route_type, MIN_OBSERVATIONS, include_low_confidence),
+        ("delay-by-route", int(minutes), route_type, include_low_confidence),
+        lambda: _delay_by_route(int(minutes), route_type, MIN_OBSERVATIONS, include_low_confidence),
         ttl_s=ANALYTICS_TTL_S,
     )
 
@@ -111,7 +123,7 @@ async def _delay_by_route(
 
 @router.get("/divergence")
 async def divergence(
-    minutes: Window = 60,
+    minutes: Window = Window.HOUR,
     route_type: int | None = Query(None, ge=0, le=7),
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
@@ -123,8 +135,8 @@ async def divergence(
     Thinned to one observation per vehicle per minute. Consecutive 15s reports
     from the same vehicle are near-duplicates and would overstate the sample."""
     return await cache.get_or_set(
-        ("divergence", minutes, route_type, include_low_confidence),
-        lambda: _divergence(minutes, route_type, include_low_confidence),
+        ("divergence", int(minutes), route_type, include_low_confidence),
+        lambda: _divergence(int(minutes), route_type, include_low_confidence),
         ttl_s=ANALYTICS_TTL_S,
     )
 
@@ -222,14 +234,14 @@ async def _divergence(
 
 @router.get("/timeline")
 async def timeline(
-    minutes: Window = 180,
-    bucket_minutes: Literal[5, 15, 60] = 5,
+    minutes: Window = Window.THREE_HOURS,
+    bucket_minutes: Bucket = Bucket.FIVE_MINUTES,
     route_id: str | None = None,
     include_low_confidence: bool = False,
 ) -> dict[str, Any]:
     return await cache.get_or_set(
-        ("timeline", minutes, bucket_minutes, route_id, include_low_confidence),
-        lambda: _timeline(minutes, bucket_minutes, route_id, include_low_confidence),
+        ("timeline", int(minutes), int(bucket_minutes), route_id, include_low_confidence),
+        lambda: _timeline(int(minutes), int(bucket_minutes), route_id, include_low_confidence),
         ttl_s=ANALYTICS_TTL_S,
     )
 
