@@ -24,6 +24,9 @@ FROM (SELECT ST_SetSRID(ST_MakeLine(
 
 INSERT INTO trip VALUES ('T1', 'R1', 'S1', 0, 'Test');
 
+INSERT INTO stop_time VALUES
+    ('T1', 1, 'ST1', 18000, 18000), ('T1', 2, 'ST2', 18300, 18360), ('T1', 3, 'ST3', 18600, 18600);
+
 INSERT INTO trip_stop_offset
 SELECT 'T1', v.seq, v.stop,
        ST_LineLocatePoint(sh.geom_p,
@@ -39,6 +42,10 @@ WHERE sh.shape_id = 'S1';
 -- return stop locates to its first match on the line, so its fraction runs
 -- backwards, the way ST_LineLocatePoint treats every loop.
 INSERT INTO trip VALUES ('T2', 'R1', 'S1', 0, 'Test');
+
+INSERT INTO stop_time VALUES
+    ('T2', 1, 'ST1', 18000, 18000), ('T2', 2, 'ST2', 18300, 18360),
+    ('T2', 3, 'ST3', 18600, 18660), ('T2', 4, 'ST2', 18900, 18900);
 
 INSERT INTO trip_stop_offset
 SELECT 'T2', v.seq, v.stop,
@@ -75,6 +82,6 @@ async def db():
 async def conn(db):
     await db.execute(
         "TRUNCATE vehicle_position, trip_update, delay_observation, prediction_sample,"
-        " arrival_score, arrival_score_daily RESTART IDENTITY"
+        " arrival_score, arrival_score_daily, added_trip_match RESTART IDENTITY"
     )
     return db

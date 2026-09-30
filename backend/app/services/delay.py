@@ -9,6 +9,13 @@ Placing a vehicle needs both the feed's current_stop_sequence and the geometry.
 Sequence alone is too coarse; geometry alone fails on loop routes, where
 ST_LineLocatePoint resolves a second-pass vehicle back to the start of the line.
 Sequence selects the leg, the fraction locates the vehicle along it.
+
+A vehicle on an added trip (every Green Line train) has no timetable of its
+own. MATCH_SQL pins each such trip, when first seen, to the scheduled trip on
+its route and direction whose timetable is nearest at the stop it is at, and
+the estimator then reads that trip's timetable through the vehicle's stop ids.
+That measures deviation from the nearest scheduled slot: a train that missed
+its slot by a whole headway reads as on the next one.
 """
 
 import asyncpg
@@ -24,18 +31,84 @@ IMPLAUSIBLE_DELAY_S = 3 * 3600
 # to have left, riders are waiting, and the clock is the right measure again.
 HOLD_CAP_S = 300
 
+# an added trip with no scheduled slot within this of its stop stays unmatched
+MATCH_WINDOW_S = 3600
+# within this of the nearest slot, prefer the trip with the most stops: a
+# short-turn's timetable ends early and the train would lose its figure there
+MATCH_PREFER_LONG_S = 600
+
+MATCH_SQL = f"""
+WITH cand AS (
+    SELECT vp.trip_id, vp.start_date, vp.route_id, vp.direction_id, vp.stop_id,
+           vp.current_stop_sequence AS feed_seq, vp.ts
+    FROM vehicle_position vp
+    WHERE vp.id = ANY($1::bigint[])
+      AND vp.trip_id LIKE 'ADDED%'
+      AND vp.start_date IS NOT NULL AND vp.route_id IS NOT NULL
+      AND vp.direction_id IS NOT NULL AND vp.stop_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM added_trip_match m
+                      WHERE m.trip_id = vp.trip_id AND m.start_date = vp.start_date)
+),
+-- match on when the vehicle reaches the stop: the feed's prediction for it
+-- where we have one, otherwise now
+target AS (
+    SELECT DISTINCT ON (c.trip_id, c.start_date)
+           c.*, COALESCE(tu.arrival_time, tu.departure_time, c.ts) AS at_stop
+    FROM cand c
+    LEFT JOIN LATERAL (
+        SELECT tu.arrival_time, tu.departure_time
+        FROM trip_update tu
+        WHERE tu.trip_id = c.trip_id AND tu.stop_sequence = c.feed_seq AND tu.ts <= c.ts
+        ORDER BY tu.ts DESC
+        LIMIT 1
+    ) tu ON true
+    ORDER BY c.trip_id, c.start_date, c.ts
+),
+-- candidates come from trip_stop_offset rather than stop_time: only trips
+-- with a shape can be placed, and it is the table the estimator reads
+scored AS (
+    SELECT t.trip_id, t.start_date, t.stop_id, t.ts,
+           o.trip_id AS scheduled_trip_id,
+           round(extract(epoch FROM t.at_stop
+                 - gtfs_ts(t.start_date, COALESCE(o.arrival_s, o.departure_s), $2::text)))::int
+               AS offset_s,
+           (SELECT count(*) FROM trip_stop_offset n WHERE n.trip_id = o.trip_id) AS stops
+    FROM target t
+    JOIN trip_stop_offset o ON o.stop_id = t.stop_id
+    JOIN trip tr ON tr.trip_id = o.trip_id
+                AND tr.route_id = t.route_id AND tr.direction_id = t.direction_id
+    WHERE COALESCE(o.arrival_s, o.departure_s) IS NOT NULL
+)
+INSERT INTO added_trip_match (trip_id, start_date, scheduled_trip_id, ts, matched_stop_id, offset_s)
+SELECT DISTINCT ON (trip_id, start_date)
+       trip_id, start_date, scheduled_trip_id, ts, stop_id, offset_s
+FROM scored
+WHERE abs(offset_s) <= {MATCH_WINDOW_S}
+ORDER BY trip_id, start_date, abs(offset_s) > {MATCH_PREFER_LONG_S}, stops DESC, abs(offset_s)
+ON CONFLICT DO NOTHING
+"""
+
 
 COMPUTE_SQL = f"""
 WITH obs AS (
     SELECT vp.id, vp.vehicle_id, vp.trip_id, vp.route_id, vp.direction_id,
            vp.ts, vp.start_date, vp.current_status,
-           vp.current_stop_sequence AS seq,
+           vp.current_stop_sequence AS feed_seq,
+           -- the timetable to read: the vehicle's own trip, or for an added
+           -- trip the scheduled one it was matched to, through the stop id
+           COALESCE(m.scheduled_trip_id, vp.trip_id)            AS sched_trip_id,
+           COALESCE(ms.stop_sequence, vp.current_stop_sequence) AS seq,
            vp.geom_p
     FROM vehicle_position vp
+    LEFT JOIN added_trip_match m
+           ON m.trip_id = vp.trip_id AND m.start_date = vp.start_date
+    LEFT JOIN trip_stop_offset ms
+           ON ms.trip_id = m.scheduled_trip_id AND ms.stop_id = vp.stop_id
     WHERE vp.id = ANY($1::bigint[])
       AND vp.trip_id IS NOT NULL
       AND vp.start_date IS NOT NULL
       AND vp.current_stop_sequence IS NOT NULL
+      AND (m.trip_id IS NULL OR ms.stop_sequence IS NOT NULL)
 ),
 placed AS (
     SELECT o.*,
@@ -43,7 +116,7 @@ placed AS (
            ST_LineLocatePoint(sh.geom_p, o.geom_p) AS frac,
            ST_Distance(sh.geom_p, o.geom_p)        AS snap_error_m
     FROM obs o
-    JOIN trip  t  ON t.trip_id  = o.trip_id
+    JOIN trip  t  ON t.trip_id  = o.sched_trip_id
     JOIN shape sh ON sh.shape_id = t.shape_id
 ),
 -- the stop we're heading for, plus the one behind us: the current leg
@@ -58,11 +131,11 @@ bracketed AS (
            arr.arrived_ts
     FROM placed p
     JOIN trip_stop_offset cur
-      ON cur.trip_id = p.trip_id AND cur.stop_sequence = p.seq
+      ON cur.trip_id = p.sched_trip_id AND cur.stop_sequence = p.seq
     LEFT JOIN LATERAL (
         SELECT o2.departure_s, o2.frac, o2.stop_sequence
         FROM trip_stop_offset o2
-        WHERE o2.trip_id = p.trip_id AND o2.stop_sequence < p.seq
+        WHERE o2.trip_id = p.sched_trip_id AND o2.stop_sequence < p.seq
         ORDER BY o2.stop_sequence DESC
         LIMIT 1
     ) prev ON true
@@ -76,7 +149,7 @@ bracketed AS (
         WHERE vp2.vehicle_id = p.vehicle_id
           AND vp2.trip_id = p.trip_id
           AND vp2.start_date = p.start_date
-          AND vp2.current_stop_sequence = p.seq
+          AND vp2.current_stop_sequence = p.feed_seq
           AND vp2.current_status = 'STOPPED_AT'
           AND vp2.ts BETWEEN p.ts - interval '3 hours' AND p.ts
     ) arr ON p.current_status = 'STOPPED_AT'
@@ -148,7 +221,7 @@ final AS (
                ELSE round(extract(epoch FROM
                         s.ts - gtfs_ts(s.start_date, round(s.scheduled_s)::integer, $2::text)))
            END::integer AS computed_delay_s,
-           s.seq,
+           s.feed_seq,
            s.raw_ratio
     FROM scheduled s
 ),
@@ -165,7 +238,7 @@ with_feed AS (
                     ELSE COALESCE(tu.delay_s, tu.departure_delay_s) END AS feed_delay_s
         FROM trip_update tu
         WHERE tu.trip_id = f.trip_id
-          AND tu.stop_sequence = f.seq
+          AND tu.stop_sequence = f.feed_seq
           AND COALESCE(tu.delay_s, tu.departure_delay_s) IS NOT NULL
           AND tu.ts BETWEEN f.ts - interval '5 minutes'
                         AND f.ts + interval '5 minutes'
@@ -199,6 +272,7 @@ RETURNING 1
 async def compute(conn: asyncpg.Connection, position_ids: list[int]) -> int:
     if not position_ids:
         return 0
+    await conn.execute(MATCH_SQL, position_ids, AGENCY_TZ)
     rows = await conn.fetch(COMPUTE_SQL, position_ids, AGENCY_TZ)
     return len(rows)
 

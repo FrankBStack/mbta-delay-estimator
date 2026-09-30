@@ -17,16 +17,16 @@ def at(secs, service_date=SERVICE_DATE):
     return noon - timedelta(hours=12) + timedelta(seconds=secs)
 
 
-async def observe(conn, ts, lon, *, seq, status, lat=42.35, vehicle="v1", trip="T1"):
+async def observe(conn, ts, lon, *, seq, status, lat=42.35, vehicle="v1", trip="T1", stop=None):
     await conn.execute(
         """
         INSERT INTO vehicle_position
             (vehicle_id, trip_id, route_id, direction_id, start_date, ts,
-             geom, geom_p, current_status, current_stop_sequence)
-        SELECT $1, $8, 'R1', 0, $2, $3, g, ST_Transform(g, 26986), $4, $5
+             geom, geom_p, current_status, current_stop_sequence, stop_id)
+        SELECT $1, $8, 'R1', 0, $2, $3, g, ST_Transform(g, 26986), $4, $5, $9
         FROM (SELECT ST_SetSRID(ST_MakePoint($6, $7), 4326) AS g) p
         """,
-        vehicle, SERVICE_DATE, ts, status, seq, lon, lat, trip,
+        vehicle, SERVICE_DATE, ts, status, seq, lon, lat, trip, stop,
     )
     ids = [r["id"] for r in await conn.fetch("SELECT id FROM vehicle_position")]
     await delay.compute(conn, ids)

@@ -63,3 +63,5 @@ CREATE TABLE trip_stop_offset (
     departure_s    integer,
     PRIMARY KEY (trip_id, stop_sequence)
 );
+-- matching an added trip to a scheduled one starts from the stop it is at
+CREATE INDEX trip_stop_offset_stop_idx ON trip_stop_offset (stop_id);

@@ -27,6 +27,22 @@ CREATE INDEX IF NOT EXISTS vehicle_position_trip_idx  ON vehicle_position (trip_
 -- there is no spatial query on positions; the index only cost every insert
 DROP INDEX IF EXISTS vehicle_position_geom_idx;
 
+-- An added trip pinned to the scheduled trip it most nearly runs as, decided
+-- once, when a vehicle is first seen on it (app.services.delay.MATCH_SQL). The
+-- MBTA publishes every Green Line trip as ADDED, so without this they have no
+-- timetable to be late against. offset_s is the vehicle against that
+-- timetable at the stop it was matched on: how far off the slot it started.
+CREATE TABLE IF NOT EXISTS added_trip_match (
+    trip_id           text NOT NULL,
+    start_date        date NOT NULL,
+    scheduled_trip_id text NOT NULL,
+    ts                timestamptz NOT NULL,
+    matched_stop_id   text NOT NULL,
+    offset_s          integer NOT NULL,
+    PRIMARY KEY (trip_id, start_date)
+);
+CREATE INDEX IF NOT EXISTS added_trip_match_ts_idx ON added_trip_match (ts DESC);
+
 -- The agency's predictions, per trip/stop, with delay_s derived at insert time
 -- (the feed has no delay field of its own).
 CREATE TABLE IF NOT EXISTS trip_update (

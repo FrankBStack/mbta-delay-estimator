@@ -133,11 +133,15 @@ scheduled AS (
            COALESCE(a.stop_id, o.stop_id) AS stop_id,
            gtfs_ts(a.start_date, o.arrival_s, $3::text) AS scheduled_time
     FROM approached a
-    JOIN trip t ON t.trip_id = a.trip_id
-    JOIN trip_stop_offset o ON o.trip_id = a.trip_id AND o.stop_sequence = a.seq
+    -- an added trip's timetable is the scheduled trip it was matched to
+    LEFT JOIN added_trip_match m ON m.trip_id = a.trip_id AND m.start_date = a.start_date
+    JOIN trip t ON t.trip_id = COALESCE(m.scheduled_trip_id, a.trip_id)
+    JOIN trip_stop_offset o ON o.trip_id = t.trip_id
+     AND CASE WHEN m.trip_id IS NULL THEN o.stop_sequence = a.seq ELSE o.stop_id = a.stop_id END
     WHERE o.arrival_s IS NOT NULL
       -- the origin is a departure, not an arrival
-      AND a.seq > (SELECT min(stop_sequence) FROM trip_stop_offset WHERE trip_id = a.trip_id)
+      AND o.stop_sequence > (SELECT min(stop_sequence) FROM trip_stop_offset
+                             WHERE trip_id = t.trip_id)
 )
 INSERT INTO arrival_score
     (vehicle_id, trip_id, route_id, direction_id, start_date, stop_sequence,

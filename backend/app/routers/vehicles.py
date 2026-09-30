@@ -32,7 +32,7 @@ async def _vehicles(route_id: str | None, route_type: int | None) -> dict[str, A
         WITH latest AS (
             SELECT DISTINCT ON (vp.vehicle_id)
                    vp.vehicle_id, vp.label, vp.trip_id, vp.route_id, vp.direction_id,
-                   vp.ts, vp.bearing, vp.speed, vp.current_status,
+                   vp.start_date, vp.ts, vp.bearing, vp.speed, vp.current_status,
                    vp.current_stop_sequence, vp.stop_id,
                    ST_X(vp.geom) AS lon, ST_Y(vp.geom) AS lat
             FROM vehicle_position vp
@@ -46,6 +46,9 @@ async def _vehicles(route_id: str | None, route_type: int | None) -> dict[str, A
                s.stop_name,
                d.computed_delay_s, d.feed_delay_s, d.divergence_s,
                d.method, d.confidence,
+               -- an added trip measured against the scheduled slot it was
+               -- matched to, not a timetable of its own
+               m.scheduled_trip_id IS NOT NULL AS slot_matched,
                -- why there is no delay, so the map can say so rather than
                -- look like the estimator failed; most have no schedule at all
                CASE
@@ -63,6 +66,8 @@ async def _vehicles(route_id: str | None, route_type: int | None) -> dict[str, A
         LEFT JOIN stop  s ON s.stop_id  = l.stop_id
         LEFT JOIN delay_observation d
                ON d.vehicle_id = l.vehicle_id AND d.ts = l.ts
+        LEFT JOIN added_trip_match m
+               ON m.trip_id = l.trip_id AND m.start_date = l.start_date
         WHERE ($2::text IS NULL OR l.route_id = $2::text)
           AND ($3::int  IS NULL OR r.route_type = $3::int)
         """,
@@ -94,6 +99,7 @@ async def _vehicles(route_id: str | None, route_type: int | None) -> dict[str, A
                 "divergence_s": r["divergence_s"],
                 "method": r["method"],
                 "confidence": r["confidence"],
+                "slot_matched": r["slot_matched"],
                 "no_delay_reason": r["no_delay_reason"],
             },
         }

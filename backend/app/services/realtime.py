@@ -55,6 +55,7 @@ MIN_TRIP_MATCH_RATE = 0.5
 RETENTION = {
     "vehicle_position": RETENTION_HOURS,
     "delay_observation": RETENTION_HOURS,
+    "added_trip_match": RETENTION_HOURS,
     "trip_update": BACKFILL_HOURS,
 }
 
@@ -254,8 +255,14 @@ async def ingest_trip_updates(
                     $6::timestamptz[], $7::timestamptz[], $8::timestamptz[])
              AS u(trip_id, stop_sequence, stop_id, route_id, start_date, ts,
                   arrival_time, departure_time)
+            -- an added trip's timetable is the scheduled trip it was matched
+            -- to, read through the stop id (delay.MATCH_SQL)
+            LEFT JOIN added_trip_match m
+                   ON m.trip_id = u.trip_id AND m.start_date = u.start_date
             LEFT JOIN stop_time st
-                   ON st.trip_id = u.trip_id AND st.stop_sequence = u.stop_sequence
+                   ON st.trip_id = COALESCE(m.scheduled_trip_id, u.trip_id)
+                  AND CASE WHEN m.trip_id IS NULL THEN st.stop_sequence = u.stop_sequence
+                           ELSE st.stop_id = u.stop_id END
         )
         INSERT INTO trip_update
             (trip_id, stop_sequence, stop_id, route_id, start_date, ts,
