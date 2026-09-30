@@ -1,7 +1,8 @@
 -- Realtime tables: what the poller writes and the API reads. Every statement
 -- is IF NOT EXISTS, so this file is safe to run on every process start (db.py
 -- does) and on every feed reload; nothing here is ever dropped. schema.sql
--- must have run first, for postgis and gtfs_ts().
+-- must have run first, for postgis and gtfs_ts(); the static tables are in
+-- schema_static.sql.
 
 CREATE TABLE IF NOT EXISTS vehicle_position (
     id                    bigserial PRIMARY KEY,

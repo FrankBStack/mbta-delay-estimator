@@ -6,6 +6,7 @@ import asyncpg
 import pytest
 
 SCHEMA = pathlib.Path(__file__).resolve().parents[1] / "app" / "schema.sql"
+STATIC_SCHEMA = SCHEMA.with_name("schema_static.sql")
 REALTIME_SCHEMA = SCHEMA.with_name("schema_realtime.sql")
 ADMIN_URL = os.getenv("TEST_ADMIN_URL", "postgresql://localhost:5432/postgres")
 TEST_URL = os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/tracker_test")
@@ -63,6 +64,7 @@ async def db():
 
     conn = await asyncpg.connect(TEST_URL)
     await conn.execute(SCHEMA.read_text())
+    await conn.execute(STATIC_SCHEMA.read_text())
     await conn.execute(REALTIME_SCHEMA.read_text())
     await conn.execute(STATIC_SQL)
     yield conn

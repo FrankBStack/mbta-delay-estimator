@@ -7,8 +7,9 @@
 A kept download is reused until it is a day old, then fetched again, so a
 scheduled reload actually picks up the agency's new feed.
 
-Drops and rebuilds the static tables, then runs app.offsets. Slow and
-occasional; the poller only ever reads these tables. Positions and
+Builds a fresh set of static tables in a staging schema, runs app.offsets
+there, and swaps them in with one short transaction. The live tables are
+never empty, and a load that fails leaves them as they were. Positions and
 observations are left alone.
 """
 
@@ -31,6 +32,17 @@ from .config import GTFS_STATIC_URL, PROJECTED_SRID
 
 CACHE = pathlib.Path(__file__).resolve().parents[1] / ".cache"
 CACHE_MAX_AGE_H = 24
+
+STAGING = "gtfs_new"
+# In the order the poller and API take their locks (stop_time first, then
+# route before trip before shape), so the swap can't deadlock with a poll
+STATIC_TABLES = (
+    "stop_time", "route", "trip", "shape", "trip_stop_offset", "stop",
+    "calendar_date", "calendar",
+)
+SWAP_LOCK_TIMEOUT_S = 5
+SWAP_ATTEMPTS = 6
+SWAP_RETRY_S = 5
 
 # a long stop_desc will exceed the default limit
 csv.field_size_limit(10_000_000)
@@ -310,6 +322,82 @@ async def load_calendar(conn: asyncpg.Connection, feed: Feed) -> tuple[int, int]
     return len(cal), len(dates)
 
 
+async def load(conn: asyncpg.Connection, feed: Feed) -> None:
+    """Load the feed into a staging schema on this connection and swap it
+    in. Every unqualified table name below resolves there through the
+    search_path; feed_meta and the realtime tables stay in public."""
+    print("applying schema")
+    await db.apply_schema(conn)
+    await conn.execute(f"DROP SCHEMA IF EXISTS {STAGING} CASCADE; CREATE SCHEMA {STAGING}")
+    await conn.execute(f"SET search_path = {STAGING}, public")
+    try:
+        await conn.execute(db.STATIC_SCHEMA_PATH.read_text())
+
+        async with conn.transaction():
+            steps = [
+                ("routes", load_routes),
+                ("stops", load_stops),
+                ("shapes", load_shapes),
+                ("trips", load_trips),
+                ("stop_times", load_stop_times),
+            ]
+            for label, fn in steps:
+                started = time.monotonic()
+                n = await fn(conn, feed)
+                print(f"  {label:<12} {n:>9,}  ({time.monotonic()-started:.1f}s)")
+
+            cal, dates = await load_calendar(conn, feed)
+            print(f"  {'calendar':<12} {cal:>9,}  (+{dates:,} exceptions)")
+
+        print("analyzing")
+        for table in ("stop_time", "trip", "shape", "stop"):
+            await conn.execute(f"ANALYZE {table}")
+
+        await offsets.build(conn)
+
+        info = next(iter(feed.rows("feed_info.txt")), {})
+        end_date = parse_date(info.get("feed_end_date", ""))
+        meta = {
+            "loaded_at": dt.datetime.now(dt.UTC).isoformat(),
+            "source": GTFS_STATIC_URL,
+            "feed_version": info.get("feed_version") or "",
+            "feed_end_date": end_date.isoformat() if end_date else "",
+        }
+        await swap(conn, meta)
+        if meta["feed_version"]:
+            print(f"  feed {meta['feed_version']}, valid to {meta['feed_end_date']}")
+    finally:
+        await conn.execute("RESET search_path")
+        await conn.execute(f"DROP SCHEMA IF EXISTS {STAGING} CASCADE")
+
+
+async def swap(conn: asyncpg.Connection, meta: dict[str, str]) -> None:
+    """Replace the live static tables with the staged ones. One transaction,
+    so readers see either the old set or the new; the drop needs an
+    exclusive lock on each table, which a running query holds off, so wait
+    only briefly and try again rather than queue every reader behind it."""
+    drop = ", ".join(f"public.{t}" for t in STATIC_TABLES)
+    move = "; ".join(f"ALTER TABLE {STAGING}.{t} SET SCHEMA public" for t in STATIC_TABLES)
+    for attempt in range(1, SWAP_ATTEMPTS + 1):
+        try:
+            async with conn.transaction():
+                await conn.execute(f"SET LOCAL lock_timeout = '{SWAP_LOCK_TIMEOUT_S}s'")
+                await conn.execute(f"DROP TABLE IF EXISTS {drop} CASCADE")
+                await conn.execute(move)
+                await conn.executemany(
+                    "INSERT INTO public.feed_meta (key, value) VALUES ($1, $2)"
+                    " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                    list(meta.items()),
+                )
+            print("  swapped in")
+            return
+        except (asyncpg.LockNotAvailableError, asyncpg.DeadlockDetectedError) as exc:
+            if attempt == SWAP_ATTEMPTS:
+                raise
+            print(f"  swap blocked ({type(exc).__name__}), retrying in {SWAP_RETRY_S}s")
+            await asyncio.sleep(SWAP_RETRY_S)
+
+
 async def run(zip_path: pathlib.Path | None, keep: bool) -> None:
     downloaded = False
     if zip_path is None:
@@ -328,46 +416,7 @@ async def run(zip_path: pathlib.Path | None, keep: bool) -> None:
     pool = await db.connect()
     try:
         async with pool.acquire() as conn:
-            print("applying schema")
-            await db.apply_schema(conn)
-
-            async with conn.transaction():
-                steps = [
-                    ("routes", load_routes),
-                    ("stops", load_stops),
-                    ("shapes", load_shapes),
-                    ("trips", load_trips),
-                    ("stop_times", load_stop_times),
-                ]
-                for label, fn in steps:
-                    started = time.monotonic()
-                    n = await fn(conn, feed)
-                    print(f"  {label:<12} {n:>9,}  ({time.monotonic()-started:.1f}s)")
-
-                cal, dates = await load_calendar(conn, feed)
-                print(f"  {'calendar':<12} {cal:>9,}  (+{dates:,} exceptions)")
-
-                info = next(iter(feed.rows("feed_info.txt")), {})
-                end_date = parse_date(info.get("feed_end_date", ""))
-                meta = {
-                    "loaded_at": dt.datetime.now(dt.UTC).isoformat(),
-                    "source": GTFS_STATIC_URL,
-                    "feed_version": info.get("feed_version") or "",
-                    "feed_end_date": end_date.isoformat() if end_date else "",
-                }
-                await conn.executemany(
-                    "INSERT INTO feed_meta (key, value) VALUES ($1, $2)"
-                    " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                    list(meta.items()),
-                )
-                if meta["feed_version"]:
-                    print(f"  feed {meta['feed_version']}, valid to {meta['feed_end_date']}")
-
-            print("analyzing")
-            for table in ("stop_time", "trip", "shape", "stop"):
-                await conn.execute(f"ANALYZE {table}")
-
-        await offsets.build()
+            await load(conn, feed)
     finally:
         feed.close()
         await db.close()

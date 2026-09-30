@@ -18,13 +18,9 @@ import asyncpg
 from . import db
 
 
-async def build() -> dict[str, Any]:
-    pool = await db.connect()
-    async with pool.acquire() as conn:
-        return await _build(conn)
-
-
-async def _build(conn: asyncpg.Connection) -> dict[str, Any]:
+async def build(conn: asyncpg.Connection) -> dict[str, Any]:
+    """Fill trip_stop_offset from trip, stop_time, shape and stop, whichever
+    schema the connection's search_path resolves them in."""
     print("computing stop offsets along shapes")
     started = time.monotonic()
 
@@ -123,8 +119,10 @@ async def _build(conn: asyncpg.Connection) -> dict[str, Any]:
 
 if __name__ == "__main__":
     async def _main() -> None:
+        pool = await db.connect()
         try:
-            await build()
+            async with pool.acquire() as conn:
+                await build(conn)
         finally:
             await db.close()
 

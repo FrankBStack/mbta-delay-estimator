@@ -25,9 +25,12 @@ reports the real poller regardless of which process it runs in.
 
 ## Feed reload
 
-The reload drops and rebuilds the static tables, leaving observations alone,
-and is a brief outage: vehicles render without delays until the offsets finish.
-If that window matters, build into a new schema and swap.
+The reload builds a fresh set of static tables in a staging schema, computes
+the offsets there, and swaps the set in with one short transaction, so the
+live tables are never empty and a load that fails part-way changes nothing.
+The swap needs an exclusive lock on each table; a running query holds it off
+for up to five seconds, after which the loader waits and tries again rather
+than queue every reader behind it. Observations are left alone throughout.
 
 Trip ids change with every MBTA rating, so a stale static feed shows up as
 vehicles quietly losing their delay. The poller warns when the loaded feed's
@@ -44,12 +47,13 @@ CORS configuration is needed.
 CI publishes amd64 and arm64 images on every push to main, so a deploy is
 `docker compose pull && docker compose up -d`; `build` is for local changes.
 
-The schema is in two files. `schema.sql` holds the static tables and runs on
-a feed reload, dropping and rebuilding them. `schema_realtime.sql` holds the
-realtime tables, every statement `IF NOT EXISTS`, and every process runs it at
+The schema is in three files. `schema.sql` holds the extension, `gtfs_ts()`
+and `feed_meta`, all idempotent. `schema_static.sql` holds the static tables;
+a feed load creates them in a staging schema and swaps them in, so it is only
+run directly into an empty database. `schema_realtime.sql` holds the realtime
+tables, every statement `IF NOT EXISTS`, and every process runs it at
 startup, so a deploy that adds a realtime table or column needs no migration
-step. Never run `schema.sql` by hand against a live database: it drops the
-static tables.
+step.
 
 ## Arrival scoring
 

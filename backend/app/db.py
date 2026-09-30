@@ -7,6 +7,7 @@ from .config import DATABASE_URL, DB_POOL_MAX, DB_POOL_MIN
 _pool: asyncpg.Pool | None = None
 
 SCHEMA_PATH = pathlib.Path(__file__).with_name("schema.sql")
+STATIC_SCHEMA_PATH = pathlib.Path(__file__).with_name("schema_static.sql")
 REALTIME_SCHEMA_PATH = pathlib.Path(__file__).with_name("schema_realtime.sql")
 SCHEMA_LOCK_TIMEOUT_S = 30
 
@@ -48,9 +49,9 @@ def pool() -> asyncpg.Pool:
 
 
 async def apply_schema(conn: asyncpg.Connection) -> None:
-    """Drops and recreates the static tables, then makes sure the realtime
-    tables exist. Those are IF NOT EXISTS and survive, so a feed reload keeps
-    the observation history."""
+    """The extension, gtfs_ts() and the realtime tables: everything except
+    the static tables, which app.gtfs_static builds and swaps in. All of it
+    is idempotent, so a feed reload keeps the observation history."""
     await conn.execute(SCHEMA_PATH.read_text())
     await conn.execute(REALTIME_SCHEMA_PATH.read_text())
 

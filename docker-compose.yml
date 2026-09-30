@@ -30,7 +30,8 @@ services:
       # applied once, when the volume is first created, so the API and poller
       # can start before the feed has been loaded
       - ./backend/app/schema.sql:/docker-entrypoint-initdb.d/20_schema.sql:ro
-      - ./backend/app/schema_realtime.sql:/docker-entrypoint-initdb.d/21_schema_realtime.sql:ro
+      - ./backend/app/schema_static.sql:/docker-entrypoint-initdb.d/21_schema_static.sql:ro
+      - ./backend/app/schema_realtime.sql:/docker-entrypoint-initdb.d/22_schema_realtime.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
       interval: 5s
@@ -66,7 +67,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # one-off: drops and rebuilds the static tables
+  # one-off: loads the feed into fresh static tables and swaps them in
   load:
     <<: *backend
     profiles: [tools]

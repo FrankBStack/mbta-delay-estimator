@@ -157,7 +157,8 @@ containers so API replicas never double-poll.
 
 ```
 backend/app/
-  schema.sql        static tables, indexes, and the gtfs_ts() time helper
+  schema.sql        the gtfs_ts() time helper and feed metadata
+  schema_static.sql routes, stops, shapes, trips, stop times
   schema_realtime.sql  positions, predictions, observations, arrival scores
   gtfs_static.py    GTFS zip into PostGIS via streaming COPY
   offsets.py        ST_LineLocatePoint stop-position cache
