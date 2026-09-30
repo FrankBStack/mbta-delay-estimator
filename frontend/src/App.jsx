@@ -266,11 +266,10 @@ export default function App() {
 
   const feedAge = secondsAgo(health?.poller?.feed_timestamp);
   const status = describeStatus({ error, analyticsError, health, feedAgeS: feedAge });
-  const stale = status.level !== "ok";
-  const devHint =
-    status.level === "down" && DEV_HOST.test(window.location.hostname)
-      ? " Is uvicorn running on :8010?"
-      : "";
+  const stale = status.level === "stale" || status.level === "down";
+  // raw errors are for whoever is running it locally, not for visitors
+  const dev = DEV_HOST.test(window.location.hostname);
+  const devHint = status.level === "down" && dev ? " Is uvicorn running on :8010?" : "";
 
   return (
     <div className="app">
@@ -322,7 +321,7 @@ export default function App() {
       {status.headline && (
         <div className="banner" data-level={status.level} role="status">
           <span>{status.headline}{devHint}</span>
-          {status.detail && (
+          {dev && status.detail && (
             <details>
               <summary>Details</summary>
               <code>{status.detail}</code>

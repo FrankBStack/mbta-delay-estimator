@@ -2,7 +2,6 @@
 
 export const POLL_STEPS_MS = [5000, 15000, 30000];
 export const STALE_AFTER_S = 90;
-export const LOW_DISK_FRACTION = 0.1;
 
 // Back off while requests fail so a struggling server isn't hammered by every
 // open tab; snap back to the fast cadence on the first success.
@@ -27,8 +26,10 @@ export function keepLastGood(prev, next, stale) {
   return next;
 }
 
-// level: ok | stale | down. `headline` is written for a visitor; `detail` is
-// the raw message for whoever is debugging.
+// level: ok | note | stale | down. Only stale and down mean the map itself is
+// behind; a note is something beside it. `headline` is written for a visitor;
+// `detail` is the raw message for whoever is debugging. Operator concerns
+// (scoring, disk) stay in /api/analytics/health and off the page.
 export function describeStatus({ error, analyticsError, health, feedAgeS }) {
   if (error) {
     return {
@@ -39,34 +40,26 @@ export function describeStatus({ error, analyticsError, health, feedAgeS }) {
     };
   }
 
+  const poller = health?.poller;
+  if (feedAgeS !== null && feedAgeS !== undefined && feedAgeS > STALE_AFTER_S) {
+    return {
+      level: "stale",
+      headline: `Positions last updated ${formatAge(feedAgeS)} ago.`,
+      detail: poller?.last_error ?? null,
+    };
+  }
+
   const notes = [];
   const details = [];
-  const poller = health?.poller;
-  const disk = health?.disk;
-
-  if (feedAgeS !== null && feedAgeS !== undefined && feedAgeS > STALE_AFTER_S) {
-    notes.push(`Positions last updated ${formatAge(feedAgeS)} ago.`);
+  if (poller?.trip_updates_error) {
+    notes.push("MBTA predictions are unavailable; delays are still computed from positions.");
+    details.push(poller.trip_updates_error);
   }
-  if (poller?.last_error) {
-    notes.push("The server reported a problem storing data.");
-    details.push(poller.last_error);
-  }
-  if (poller?.last_score_error) {
-    notes.push("Arrival scoring has fallen behind.");
-    details.push(poller.last_score_error);
-  }
-  // the map is still live; only the route figures are behind
   if (analyticsError) {
     notes.push("Route statistics are not refreshing.");
     details.push(analyticsError);
   }
-  if (disk?.total_bytes && disk.free_bytes / disk.total_bytes < LOW_DISK_FRACTION) {
-    notes.push("The server is low on disk space.");
-    details.push(
-      `${Math.round(disk.free_bytes / 1e9)} GB free of ${Math.round(disk.total_bytes / 1e9)} GB`
-    );
-  }
 
   if (!notes.length) return { level: "ok", headline: null, detail: null };
-  return { level: "stale", headline: notes.join(" "), detail: details.join(" · ") || null };
+  return { level: "note", headline: notes.join(" "), detail: details.join(" · ") };
 }

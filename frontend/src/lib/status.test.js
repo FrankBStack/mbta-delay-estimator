@@ -63,44 +63,49 @@ describe("describeStatus", () => {
     expect(s.headline).toBe("Positions last updated 4 min ago.");
   });
 
-  it("keeps a failing analytics poll off the outage banner", () => {
+  it("keeps a failing analytics poll off the map", () => {
     const s = describeStatus({
       error: null,
       analyticsError: "500 Internal Server Error on /api/analytics/divergence",
       health: {},
       feedAgeS: 10,
     });
-    expect(s.level).toBe("stale");
+    expect(s.level).toBe("note");
     expect(s.headline).toBe("Route statistics are not refreshing.");
     expect(s.detail).toContain("500");
   });
 
-  it("surfaces a poller error and low disk in plain words", () => {
+  it("says the comparison is paused when only the predictions feed is down", () => {
+    const s = describeStatus({
+      error: null,
+      feedAgeS: 10,
+      health: { poller: { trip_updates_error: "ConnectError: no route to host" } },
+    });
+    expect(s.level).toBe("note");
+    expect(s.headline).toMatch(/predictions are unavailable/);
+    expect(s.detail).toContain("ConnectError");
+  });
+
+  it("attaches the poller's error to a stale feed", () => {
     const s = describeStatus({
       error: null,
       feedAgeS: 400,
-      health: {
-        poller: { last_error: "DiskFull: could not extend file" },
-        disk: { free_bytes: 1e9, total_bytes: 30e9 },
-      },
+      health: { poller: { last_error: "DiskFull: could not extend file" } },
     });
     expect(s.level).toBe("stale");
-    expect(s.headline).toContain("problem storing data");
-    expect(s.headline).toContain("low on disk space");
     expect(s.detail).toContain("DiskFull");
-    expect(s.detail).toContain("1 GB free of 30 GB");
   });
 
-  it("says when arrival scoring is failing", () => {
+  it("leaves scoring and disk to the operator", () => {
     const s = describeStatus({
       error: null,
       feedAgeS: 10,
       health: {
-        poller: { last_score_error: "QueryCanceledError: canceling statement due to statement timeout" },
+        poller: { last_score_error: "QueryCanceledError: statement timeout" },
+        disk: { free_bytes: 1e9, total_bytes: 30e9 },
       },
     });
-    expect(s.level).toBe("stale");
-    expect(s.headline).toBe("Arrival scoring has fallen behind.");
-    expect(s.detail).toContain("statement timeout");
+    expect(s.level).toBe("ok");
+    expect(s.headline).toBe(null);
   });
 });

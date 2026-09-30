@@ -263,6 +263,12 @@ p {
   border-bottom-color: rgba(236, 131, 90, 0.35);
   color: #f2c4ad;
 }
+/* a note leaves the map alone: something beside it is behind */
+.banner[data-level="note"] {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+}
 .banner details {
   display: inline;
 }
