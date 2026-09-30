@@ -1,11 +1,16 @@
 import { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+// maplibre 6 looks for its worker beside its own bundle, which Vite doesn't
+// ship; hand it the worker Vite builds instead
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { formatDelay, noDelayLabel } from "../lib/delay.js";
 import { addMarkerImages, markerImageExpression } from "../lib/markers.js";
 import { bounds } from "../lib/routes.js";
 import { STALE_AFTER_S, formatAge } from "../lib/status.js";
 
 const BASEMAP = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+maplibregl.setWorkerUrl(workerUrl);
 // Mirrors the phone layout in index.css: the sheet opens over this share of
 // the map when a vehicle is tapped.
 const PHONE = window.matchMedia("(max-width: 760px) and (orientation: portrait)");

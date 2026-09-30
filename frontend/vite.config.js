@@ -13,4 +13,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // the map library is most of the bundle and changes least; on its own
+    // a deploy only invalidates the small app chunk for returning visitors
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          maplibre: ["maplibre-gl"],
+          react: ["react", "react-dom"],
+        },
+      },
+    },
+  },
 });
