@@ -58,6 +58,9 @@ export default function App() {
   // one route picked out of the mode, by search or from the chart
   const [routeId, setRouteId] = useState(() => readFilters(window.location.search).routeId);
   const [routes, setRoutes] = useState([]);
+  // a vehicle found by its number, selected once the map's list has it
+  const [pendingVehicleId, setPendingVehicleId] = useState(null);
+  const [centerOn, setCenterOn] = useState(null);
   const [error, setError] = useState(null);
   const [analyticsError, setAnalyticsError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -225,6 +228,28 @@ export default function App() {
     if (vehicles && selectedVehicleId && !selected) handleSelect(null);
   }, [vehicles, selectedVehicleId, selected, handleSelect]);
 
+  // A vehicle typed into the search may be outside the current filter, so
+  // widen to everything and select it when the next list arrives.
+  const handleVehicleSearch = useCallback(
+    (feature) => {
+      const id = feature.properties.vehicle_id;
+      if (!vehicles?.features.some((f) => f.properties.vehicle_id === id)) {
+        setRouteId(null);
+        setRouteType(null);
+      }
+      setPendingVehicleId(id);
+    },
+    [vehicles]
+  );
+  useEffect(() => {
+    if (!pendingVehicleId) return;
+    const f = vehicles?.features.find((v) => v.properties.vehicle_id === pendingVehicleId);
+    if (!f) return;
+    setPendingVehicleId(null);
+    handleSelect(pendingVehicleId);
+    setCenterOn(f.geometry.coordinates);
+  }, [vehicles, pendingVehicleId, handleSelect]);
+
   // swipe up opens the sheet; swipe down from the top of its content closes it
   const onTouchStart = (e) => {
     touch.current = { y: e.touches[0].clientY, top: sidebar.current?.scrollTop ?? 0 };
@@ -268,7 +293,12 @@ export default function App() {
           </div>
         </div>
 
-        <RouteSearch routes={routes} routeId={routeId} onSelect={handleRoute} />
+        <RouteSearch
+          routes={routes}
+          routeId={routeId}
+          onSelect={handleRoute}
+          onSelectVehicle={handleVehicleSearch}
+        />
 
         <div className="filters">
           <div className="segmented" role="group" aria-label="Mode">
@@ -307,6 +337,7 @@ export default function App() {
           routeShape={routeShape}
           hoverShape={hoverShape}
           fitTo={fitTo}
+          centerOn={centerOn}
           selectedVehicleId={selectedVehicleId}
           onSelectVehicle={handleSelect}
           onHoverVehicle={handleHover}

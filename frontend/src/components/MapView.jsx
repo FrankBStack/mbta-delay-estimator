@@ -32,6 +32,7 @@ export default function MapView({
   routeShape,
   hoverShape,
   fitTo = null,
+  centerOn = null,
   selectedVehicleId,
   onSelectVehicle,
   onHoverVehicle,
@@ -265,6 +266,24 @@ export default function MapView({
     if (ready.current) apply();
     else map.current.once("load", apply);
   }, [fitTo]);
+
+  // bring a vehicle found by its number into view, above the phone sheet
+  useEffect(() => {
+    if (!map.current || !centerOn) return;
+    const apply = () => {
+      const m = map.current;
+      if (!m) return;
+      const h = m.getContainer().clientHeight;
+      m.easeTo({
+        center: centerOn,
+        zoom: Math.max(m.getZoom(), 13),
+        offset: PHONE.matches ? [0, -(h * SHEET_HALF) / 2] : [0, 0],
+        duration: 700,
+      });
+    };
+    if (ready.current) apply();
+    else map.current.once("load", apply);
+  }, [centerOn]);
 
   useSourceData(map, ready, "route-shape", routeShape);
   useSourceData(map, ready, "route-hover", hoverShape);

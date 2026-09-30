@@ -150,6 +150,52 @@ p {
 .route-clear:focus-visible {
   outline: 2px solid var(--focus);
 }
+/* what Enter found: several things, or nothing. Hangs off the right edge so
+   it has room on a phone, where the box is narrow */
+.search-choices,
+.search-note {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 100%;
+  max-width: calc(100vw - 24px);
+  width: max-content;
+  margin: 0;
+  background: rgba(12, 12, 18, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.search-choices {
+  list-style: none;
+  padding: 4px;
+}
+.search-choices button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.search-choices button:hover,
+.search-choices button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  outline: none;
+}
+.search-note {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  padding: 6px 9px;
+}
 
 .dot {
   width: 8px;
@@ -767,7 +813,7 @@ main {
     display: none;
   }
   .route-search {
-    width: 150px;
+    width: 160px;
   }
   /* 16px or iOS zooms the page on focus */
   .route-search input {
