@@ -17,7 +17,7 @@ Stop-to-shape snap error across the loaded feed: mean 7.0m, p95 11.9m.
 
 `ST_LineLocatePoint` returns the first nearest point on the line, so on a loop
 route a vehicle on its second pass resolves to a position near the start. This
-affects 2.6% of MBTA trips, flagged at load time as `frac_monotonic = false`.
+affects 2.6% of MBTA trips, counted at load time.
 The feed's `current_stop_sequence` picks which leg the vehicle is on. Where that
 leg's stop fractions run backwards, an in-transit vehicle can't be placed along
 it and the observation is dropped rather than scored against the wrong stop;

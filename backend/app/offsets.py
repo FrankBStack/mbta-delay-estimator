@@ -47,8 +47,7 @@ async def build(conn: asyncpg.Connection) -> dict[str, Any]:
         SELECT ss.shape_id,
                ss.stop_id,
                ST_LineLocatePoint(sh.geom_p, s.geom_p)      AS frac,
-               ST_Distance(sh.geom_p, s.geom_p)             AS snap_error_m,
-               sh.length_m
+               ST_Distance(sh.geom_p, s.geom_p)             AS snap_error_m
         FROM shape_stop ss
         JOIN shape sh ON sh.shape_id = ss.shape_id
         JOIN stop  s  ON s.stop_id   = ss.stop_id
@@ -60,11 +59,9 @@ async def build(conn: asyncpg.Connection) -> dict[str, Any]:
     await conn.execute(
         """
         INSERT INTO trip_stop_offset
-            (shape_id, trip_id, stop_sequence, stop_id, frac, dist_m,
-             snap_error_m, arrival_s, departure_s, frac_monotonic)
-        SELECT t.shape_id, st.trip_id, st.stop_sequence, st.stop_id,
-               f.frac, f.frac * f.length_m, f.snap_error_m,
-               st.arrival_s, st.departure_s, true
+            (trip_id, stop_sequence, stop_id, frac, arrival_s, departure_s)
+        SELECT st.trip_id, st.stop_sequence, st.stop_id, f.frac,
+               st.arrival_s, st.departure_s
         FROM stop_time st
         JOIN trip t ON t.trip_id = st.trip_id
         JOIN shape_stop_frac f
@@ -73,38 +70,31 @@ async def build(conn: asyncpg.Connection) -> dict[str, Any]:
         """
     )
 
+    await conn.execute("ANALYZE trip_stop_offset")
+
     # Loop routes pass the same point twice and ST_LineLocatePoint only ever
-    # returns the first match, so their fractions jump backwards. Not corrupt
-    # data, but you can't interpolate those by fraction alone.
-    await conn.execute(
+    # returns the first match, so their fractions jump backwards. Counted
+    # here so a load says how much of the feed that is; delay.py checks it
+    # per leg when it places a vehicle
+    stats = await conn.fetchrow(
         """
         WITH stepped AS (
             SELECT trip_id, frac,
                    lag(frac) OVER (PARTITION BY trip_id ORDER BY stop_sequence) AS prev
             FROM trip_stop_offset
         ),
-        flags AS (
+        trips AS (
             SELECT trip_id, bool_and(frac >= prev - 1e-9) AS mono
             FROM stepped WHERE prev IS NOT NULL GROUP BY trip_id
         )
-        UPDATE trip_stop_offset o
-        SET frac_monotonic = flags.mono
-        FROM flags WHERE flags.trip_id = o.trip_id
-        """
-    )
-
-    await conn.execute("ANALYZE trip_stop_offset")
-
-    stats = await conn.fetchrow(
-        """
-        SELECT count(*)                                          AS rows,
-               count(DISTINCT trip_id)                            AS trips,
-               count(DISTINCT trip_id) FILTER (WHERE NOT frac_monotonic) AS non_monotonic,
-               round(avg(snap_error_m)::numeric, 1)               AS mean_snap_m,
+        SELECT (SELECT count(*) FROM trip_stop_offset)               AS rows,
+               (SELECT count(*) FROM trips)                          AS trips,
+               (SELECT count(*) FROM trips WHERE NOT mono)           AS non_monotonic,
+               round(avg(snap_error_m)::numeric, 1)                  AS mean_snap_m,
                round(percentile_cont(0.95) WITHIN GROUP (ORDER BY snap_error_m)::numeric, 1)
-                                                                  AS p95_snap_m,
-               round(max(snap_error_m)::numeric, 1)               AS max_snap_m
-        FROM trip_stop_offset
+                                                                     AS p95_snap_m,
+               round(max(snap_error_m)::numeric, 1)                  AS max_snap_m
+        FROM shape_stop_frac
         """
     )
     r = dict(stats)

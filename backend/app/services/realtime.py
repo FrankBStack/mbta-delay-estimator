@@ -40,7 +40,6 @@ STATE: dict[str, Any] = {
     "feed_timestamp": None,
     "vehicles_seen": 0,
     "positions_inserted": 0,
-    "trip_updates_inserted": 0,
     "delays_computed": 0,
     "polls": 0,
     "last_prune": None,
@@ -402,9 +401,8 @@ async def poll_once(client: httpx.AsyncClient) -> dict[str, Any]:
         async with conn.transaction():
             # predictions first, so the delay pass can join against them in the
             # same poll rather than lagging a cycle behind
-            updates = 0
             if updates_msg is not None:
-                updates = await ingest_trip_updates(conn, updates_msg, wanted_stops(vehicles_msg))
+                await ingest_trip_updates(conn, updates_msg, wanted_stops(vehicles_msg))
             new_ids = await ingest_vehicles(conn, vehicles_msg)
             computed = await delay.compute(conn, new_ids) if new_ids else 0
             if new_ids:
@@ -418,7 +416,6 @@ async def poll_once(client: httpx.AsyncClient) -> dict[str, Any]:
             else None
         ),
         positions_inserted=len(new_ids),
-        trip_updates_inserted=updates,
         delays_computed=computed,
         last_error=None,
         polls=STATE["polls"] + 1,

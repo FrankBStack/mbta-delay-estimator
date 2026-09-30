@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS vehicle_position (
 );
 CREATE INDEX IF NOT EXISTS vehicle_position_ts_idx    ON vehicle_position (ts DESC);
 CREATE INDEX IF NOT EXISTS vehicle_position_trip_idx  ON vehicle_position (trip_id, ts DESC);
-CREATE INDEX IF NOT EXISTS vehicle_position_geom_idx  ON vehicle_position USING gist (geom);
+-- there is no spatial query on positions; the index only cost every insert
+DROP INDEX IF EXISTS vehicle_position_geom_idx;
 
 -- The agency's predictions, per trip/stop, with delay_s derived at insert time
 -- (the feed has no delay field of its own).

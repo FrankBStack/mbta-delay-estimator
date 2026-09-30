@@ -36,10 +36,9 @@ CACHE_MAX_AGE_H = 24
 STAGING = "gtfs_new"
 # In the order the poller and API take their locks (stop_time first, then
 # route before trip before shape), so the swap can't deadlock with a poll
-STATIC_TABLES = (
-    "stop_time", "route", "trip", "shape", "trip_stop_offset", "stop",
-    "calendar_date", "calendar",
-)
+STATIC_TABLES = ("stop_time", "route", "trip", "shape", "trip_stop_offset", "stop")
+# loaded by earlier versions; dropped by the swap until every box has reloaded
+LEGACY_TABLES = ("calendar_date", "calendar")
 SWAP_LOCK_TIMEOUT_S = 5
 SWAP_ATTEMPTS = 6
 SWAP_RETRY_S = 5
@@ -157,21 +156,18 @@ async def load_stops(conn: asyncpg.Connection, feed: Feed) -> int:
         if lat is None or lon is None:
             # generic nodes / boarding areas have no coordinate
             continue
-        records.append(
-            (r["stop_id"], r.get("stop_name") or None,
-             r.get("parent_station") or None, lat, lon)
-        )
+        records.append((r["stop_id"], r.get("stop_name") or None, lat, lon))
 
     await conn.execute(
         "CREATE TEMP TABLE stop_stage"
-        " (stop_id text, stop_name text, parent_station text,"
-        "  lat double precision, lon double precision) ON COMMIT DROP"
+        " (stop_id text, stop_name text, lat double precision, lon double precision)"
+        " ON COMMIT DROP"
     )
     await conn.copy_records_to_table("stop_stage", records=records)
     await conn.execute(
         f"""
-        INSERT INTO stop (stop_id, stop_name, parent_station, geom, geom_p)
-        SELECT stop_id, stop_name, parent_station,
+        INSERT INTO stop (stop_id, stop_name, geom, geom_p)
+        SELECT stop_id, stop_name,
                ST_SetSRID(ST_MakePoint(lon, lat), 4326),
                ST_Transform(ST_SetSRID(ST_MakePoint(lon, lat), 4326), {PROJECTED_SRID})
         FROM stop_stage
@@ -208,12 +204,11 @@ async def load_shapes(conn: asyncpg.Connection, feed: Feed) -> int:
 
     await conn.executemany(
         f"""
-        INSERT INTO shape (shape_id, geom, geom_p, length_m)
+        INSERT INTO shape (shape_id, geom, geom_p)
         VALUES (
             $1,
             ST_GeomFromText($2, 4326),
-            ST_Transform(ST_GeomFromText($2, 4326), {PROJECTED_SRID}),
-            ST_Length(ST_Transform(ST_GeomFromText($2, 4326), {PROJECTED_SRID}))
+            ST_Transform(ST_GeomFromText($2, 4326), {PROJECTED_SRID})
         )
         ON CONFLICT (shape_id) DO NOTHING
         """,
@@ -237,14 +232,13 @@ async def load_trips(conn: asyncpg.Connection, feed: Feed) -> int:
         if shape_id not in known_shapes:
             shape_id = None
         records.append(
-            (r["trip_id"], r["route_id"], r["service_id"], shape_id,
+            (r["trip_id"], r["route_id"], shape_id,
              _int(r.get("direction_id", "")), r.get("trip_headsign") or None)
         )
     await conn.copy_records_to_table(
         "trip",
         records=records,
-        columns=["trip_id", "route_id", "service_id", "shape_id",
-                 "direction_id", "trip_headsign"],
+        columns=["trip_id", "route_id", "shape_id", "direction_id", "trip_headsign"],
     )
     if orphans:
         print(f"  skipped {orphans} trips on unknown routes")
@@ -288,40 +282,6 @@ async def load_stop_times(conn: asyncpg.Connection, feed: Feed) -> int:
     return count
 
 
-async def load_calendar(conn: asyncpg.Connection, feed: Feed) -> tuple[int, int]:
-    cal = []
-    for r in feed.rows("calendar.txt"):
-        start = parse_date(r.get("start_date", ""))
-        end = parse_date(r.get("end_date", ""))
-        if start is None or end is None:
-            continue
-        cal.append(
-            (r["service_id"], _int(r.get("monday", "")), _int(r.get("tuesday", "")),
-             _int(r.get("wednesday", "")), _int(r.get("thursday", "")),
-             _int(r.get("friday", "")), _int(r.get("saturday", "")),
-             _int(r.get("sunday", "")), start, end)
-        )
-    await conn.executemany(
-        "INSERT INTO calendar (service_id, monday, tuesday, wednesday, thursday,"
-        " friday, saturday, sunday, start_date, end_date)"
-        " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING",
-        cal,
-    )
-
-    dates = []
-    for r in feed.rows("calendar_dates.txt"):
-        d = parse_date(r.get("date", ""))
-        if d is None:
-            continue
-        dates.append((r["service_id"], d, _int(r.get("exception_type", "")) or 1))
-    await conn.executemany(
-        "INSERT INTO calendar_date (service_id, date, exception_type)"
-        " VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
-        dates,
-    )
-    return len(cal), len(dates)
-
-
 async def load(conn: asyncpg.Connection, feed: Feed) -> None:
     """Load the feed into a staging schema on this connection and swap it
     in. Every unqualified table name below resolves there through the
@@ -345,9 +305,6 @@ async def load(conn: asyncpg.Connection, feed: Feed) -> None:
                 started = time.monotonic()
                 n = await fn(conn, feed)
                 print(f"  {label:<12} {n:>9,}  ({time.monotonic()-started:.1f}s)")
-
-            cal, dates = await load_calendar(conn, feed)
-            print(f"  {'calendar':<12} {cal:>9,}  (+{dates:,} exceptions)")
 
         print("analyzing")
         for table in ("stop_time", "trip", "shape", "stop"):
@@ -376,7 +333,7 @@ async def swap(conn: asyncpg.Connection, meta: dict[str, str]) -> None:
     so readers see either the old set or the new; the drop needs an
     exclusive lock on each table, which a running query holds off, so wait
     only briefly and try again rather than queue every reader behind it."""
-    drop = ", ".join(f"public.{t}" for t in STATIC_TABLES)
+    drop = ", ".join(f"public.{t}" for t in STATIC_TABLES + LEGACY_TABLES)
     move = "; ".join(f"ALTER TABLE {STAGING}.{t} SET SCHEMA public" for t in STATIC_TABLES)
     for attempt in range(1, SWAP_ATTEMPTS + 1):
         try:

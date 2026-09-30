@@ -18,17 +18,17 @@ STATIC_SQL = """
 INSERT INTO route VALUES ('R1', '1', 'Test Route', 3, NULL, NULL, 1);
 
 INSERT INTO shape
-SELECT 'S1', g, ST_Transform(g, 26986), ST_Length(ST_Transform(g, 26986))
+SELECT 'S1', g, ST_Transform(g, 26986)
 FROM (SELECT ST_SetSRID(ST_MakeLine(
     ST_MakePoint(-71.10, 42.35), ST_MakePoint(-71.08, 42.35)), 4326) AS g) s;
 
-INSERT INTO trip VALUES ('T1', 'R1', 'SVC', 'S1', 0, 'Test');
+INSERT INTO trip VALUES ('T1', 'R1', 'S1', 0, 'Test');
 
 INSERT INTO trip_stop_offset
-SELECT 'S1', 'T1', v.seq, v.stop,
+SELECT 'T1', v.seq, v.stop,
        ST_LineLocatePoint(sh.geom_p,
            ST_Transform(ST_SetSRID(ST_MakePoint(v.lon, 42.35), 4326), 26986)),
-       0, 0, v.arr, v.dep, true
+       v.arr, v.dep
 FROM shape sh,
      (VALUES (1, 'ST1', -71.10, 18000, 18000),
              (2, 'ST2', -71.09, 18300, 18360),
@@ -38,13 +38,13 @@ WHERE sh.shape_id = 'S1';
 -- T2 is an out-and-back on the same shape: ST1 -> ST2 -> ST3 -> ST2. The
 -- return stop locates to its first match on the line, so its fraction runs
 -- backwards, the way ST_LineLocatePoint treats every loop.
-INSERT INTO trip VALUES ('T2', 'R1', 'SVC', 'S1', 0, 'Test');
+INSERT INTO trip VALUES ('T2', 'R1', 'S1', 0, 'Test');
 
 INSERT INTO trip_stop_offset
-SELECT 'S1', 'T2', v.seq, v.stop,
+SELECT 'T2', v.seq, v.stop,
        ST_LineLocatePoint(sh.geom_p,
            ST_Transform(ST_SetSRID(ST_MakePoint(v.lon, 42.35), 4326), 26986)),
-       0, 0, v.arr, v.dep, false
+       v.arr, v.dep
 FROM shape sh,
      (VALUES (1, 'ST1', -71.10, 18000, 18000),
              (2, 'ST2', -71.09, 18300, 18360),
