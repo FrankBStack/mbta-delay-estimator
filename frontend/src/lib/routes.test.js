@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, matchRoutes, matchVehicles, routeLabel, vehicleLabel } from "./routes.js";
+import { bounds, matchRoutes, matchVehicles, routeLabel, settle, vehicleLabel } from "./routes.js";
 
 const ROUTES = [
   { route_id: "Red", name: "Red Line", long_name: "Red Line", active_vehicles: 18 },
@@ -97,6 +97,30 @@ describe("vehicleLabel", () => {
       vehicleLabel({ route_type: 2, label: "1864", route_name: "Providence/Stoughton Line", headsign: "South Station" })
     ).toBe("Train 1864 · Providence/Stoughton Line to South Station");
     expect(vehicleLabel({ route_type: 3, label: "1864", route_name: "9", headsign: null })).toBe("Bus 1864 · 9");
+  });
+});
+
+describe("settle", () => {
+  const train = { id: "t", route_type: 2 };
+  const bus = { id: "b", route_type: 3 };
+  const bus2 = { id: "b2", route_type: 3 };
+
+  it("takes the one match in the current mode", () => {
+    expect(settle([train, bus], 3)).toEqual({ pick: bus });
+    expect(settle([train, bus], 2)).toEqual({ pick: train });
+  });
+
+  it("offers a choice when the mode does not settle it, mode first", () => {
+    expect(settle([train, bus], null)).toEqual({ choices: [train, bus] });
+    expect(settle([train, bus, bus2], 3)).toEqual({ choices: [bus, bus2, train] });
+  });
+
+  it("still takes a lone match outside the mode", () => {
+    expect(settle([train], 3)).toEqual({ pick: train });
+  });
+
+  it("has nothing to choose from nothing", () => {
+    expect(settle([], 3)).toEqual({ choices: [] });
   });
 });
 

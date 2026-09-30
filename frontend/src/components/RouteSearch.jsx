@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
-import { matchRoutes, matchVehicles, routeLabel, vehicleLabel } from "../lib/routes.js";
+import { matchRoutes, matchVehicles, routeLabel, settle, vehicleLabel } from "../lib/routes.js";
 
 // more partial route matches than this and the answer is "type more"
 const MAX_CHOICES = 8;
 
-export default function RouteSearch({ routes, routeId, onSelect, onSelectVehicle }) {
+export default function RouteSearch({ routes, routeId, routeType, onSelect, onSelectVehicle }) {
   const current = routes.find((r) => r.route_id === routeId);
   const label = current ? routeLabel(current) : "";
   const [text, setText] = useState(label);
@@ -59,16 +59,19 @@ export default function RouteSearch({ routes, routeId, onSelect, onSelectVehicle
       ...partial.slice(0, MAX_CHOICES).map((r) => ({
         key: `r-${r.route_id}`,
         label: routeLabel(r),
+        route_type: r.route_type,
         pick: () => pickRoute(input, r),
       })),
       ...vehicles.map((f) => ({
         key: `v-${f.properties.vehicle_id}`,
         label: vehicleLabel(f.properties),
+        route_type: f.properties.route_type,
         pick: () => pickVehicle(input, f),
       })),
     ];
-    if (found.length === 1) found[0].pick();
-    else if (found.length) setChoices(found);
+    const { pick, choices: options } = settle(found, routeType);
+    if (pick) pick.pick();
+    else if (options.length) setChoices(options);
     else if (partial.length > MAX_CHOICES) setNote("Type more of the name");
     else setNote(`No route or vehicle called “${typed}” right now`);
   };

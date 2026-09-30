@@ -296,6 +296,7 @@ export default function App() {
         <RouteSearch
           routes={routes}
           routeId={routeId}
+          routeType={routeType}
           onSelect={handleRoute}
           onSelectVehicle={handleVehicleSearch}
         />

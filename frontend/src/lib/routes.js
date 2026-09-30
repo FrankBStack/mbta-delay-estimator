@@ -54,6 +54,15 @@ export function vehicleLabel(p) {
   return `${kind} ${p.label ?? p.vehicle_id} · ${route}${p.headsign ? ` to ${p.headsign}` : ""}`;
 }
 
+// One winner, or the list to choose from with the current mode's entries
+// first. The mode breaks ties; it never hides a match.
+export function settle(matches, routeType) {
+  const inMode = routeType === null ? [] : matches.filter((m) => m.route_type === routeType);
+  if (inMode.length === 1) return { pick: inMode[0] };
+  if (matches.length === 1) return { pick: matches[0] };
+  return { choices: [...inMode, ...matches.filter((m) => !inMode.includes(m))] };
+}
+
 // [[west, south], [east, north]] of any GeoJSON geometry, or null if empty
 export function bounds(geometry) {
   let w = Infinity;
