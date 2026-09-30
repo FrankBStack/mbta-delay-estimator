@@ -73,6 +73,27 @@ async def test_scores_both_estimates_against_the_arrival(conn):
     assert (other["feed_n"], other["arrivals"]) == (0, 1)
 
 
+async def test_the_arrival_itself_never_scores_the_position_estimate(conn):
+    # approaching ST2, then a one-minute countdown issued at 05:05:20 with no
+    # position report near it, then the arrival 40s later. The arrival is the
+    # nearest observation to the sample, and it is not allowed to be the one
+    # that scores the estimate: a score of zero there would be the estimator
+    # grading itself on the answer
+    await observe(conn, at(18150), -71.095, seq=2, status="IN_TRANSIT_TO")
+    await sample(conn, 2, 60, at(18320), at(18380))
+    await observe(conn, at(18360), -71.09, seq=2, status="STOPPED_AT")
+
+    assert await scoring.score(conn, at(18000), at(19000)) == 1
+    row = await conn.fetchrow("SELECT feed_60, position_60 FROM arrival_score")
+    assert row["feed_60"] == 20
+    assert row["position_60"] is None
+
+    # and the rollup compares like for like: no position, so no feed either
+    await scoring.aggregate(conn, SERVICE_DATE)
+    day = await conn.fetchrow("SELECT * FROM arrival_score_daily WHERE horizon_s = 60")
+    assert (day["arrivals"], day["feed_n"], day["position_n"]) == (1, 0, 0)
+
+
 async def test_origin_and_unseen_approaches_are_not_arrivals(conn):
     # sitting at the origin is a layover, not an arrival
     await observe(conn, at(17900), -71.10, seq=1, status="STOPPED_AT")

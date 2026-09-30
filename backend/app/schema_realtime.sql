@@ -115,6 +115,9 @@ CREATE INDEX IF NOT EXISTS arrival_score_route_idx   ON arrival_score (route_id,
 
 -- arrival_score rolled up by service day, route, horizon and hour of day.
 -- Kept indefinitely; arrival_score itself is pruned after SCORE_RETENTION_DAYS.
+-- Every statistic counts only the arrivals where both estimates existed, so
+-- the feed and position columns describe the same arrivals; `arrivals` is
+-- every arrival regardless.
 CREATE TABLE IF NOT EXISTS arrival_score_daily (
     day                 date NOT NULL,
     route_id            text NOT NULL,

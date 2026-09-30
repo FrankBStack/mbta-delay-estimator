@@ -12,6 +12,7 @@ settled, pairs each sample with the position-derived figure the estimator held
 at the same moment, and writes one row per arrival.
 
     python -m app.services.scoring --hours 20   # catch up by hand
+    python -m app.services.scoring --days 60    # rebuild the rollup from arrival_score
 """
 
 import argparse
@@ -45,6 +46,9 @@ HORIZONS_S = (60, 120, 300, 600, 900, 1200)
 # horizon lands within this
 SAMPLE_TOLERANCE_S = 30
 # the position-derived figure paired with a sample must be from within this
+# long before the sample; never after it, or the estimator would be scored on
+# a position the prediction couldn't have seen (at short horizons, the
+# arrival itself)
 MATCH_WINDOW_S = 45
 
 
@@ -158,9 +162,8 @@ LEFT JOIN LATERAL (
         FROM delay_observation d
         WHERE d.vehicle_id = s.vehicle_id AND d.trip_id = s.trip_id
           AND d.confidence IN ('high', 'medium')
-          AND d.ts BETWEEN ps.ts - interval '{MATCH_WINDOW_S} seconds'
-                       AND ps.ts + interval '{MATCH_WINDOW_S} seconds'
-        ORDER BY abs(extract(epoch FROM d.ts - ps.ts))
+          AND d.ts BETWEEN ps.ts - interval '{MATCH_WINDOW_S} seconds' AND ps.ts
+        ORDER BY d.ts DESC
         LIMIT 1
     ) d ON true
     WHERE ps.trip_id = s.trip_id AND ps.start_date = s.start_date
@@ -191,19 +194,25 @@ _AGG_COLS = [
 ]
 _AGG_VALUES = ", ".join(f"({h}, a.feed_{h}, a.position_{h})" for h in HORIZONS_S)
 
+# Every statistic is over the arrivals where both estimates existed, so the
+# feed and position columns describe the same arrivals and can be compared
 AGGREGATE_SQL = f"""
 INSERT INTO arrival_score_daily (day, route_id, horizon_s, hour, {", ".join(_AGG_COLS)})
 SELECT $1::date, a.route_id, h.horizon_s,
        extract(hour FROM a.arrived_at AT TIME ZONE $2::text)::smallint,
        count(*),
-       count(h.feed), round(avg(h.feed))::int, round(avg(abs(h.feed)))::int,
-       count(*) FILTER (WHERE abs(h.feed) <= 60),
-       count(*) FILTER (WHERE abs(h.feed) <= 120),
-       count(h.position), round(avg(h.position))::int, round(avg(abs(h.position)))::int,
-       count(*) FILTER (WHERE abs(h.position) <= 60),
-       count(*) FILTER (WHERE abs(h.position) <= 120)
+       count(p.feed), round(avg(p.feed))::int, round(avg(abs(p.feed)))::int,
+       count(*) FILTER (WHERE abs(p.feed) <= 60),
+       count(*) FILTER (WHERE abs(p.feed) <= 120),
+       count(p.position), round(avg(p.position))::int, round(avg(abs(p.position)))::int,
+       count(*) FILTER (WHERE abs(p.position) <= 60),
+       count(*) FILTER (WHERE abs(p.position) <= 120)
 FROM arrival_score a
-CROSS JOIN LATERAL (VALUES {_AGG_VALUES}) AS h(horizon_s, feed, position)
+CROSS JOIN LATERAL (VALUES {_AGG_VALUES}) AS h(horizon_s, feed_raw, position_raw)
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN h.position_raw IS NOT NULL THEN h.feed_raw END AS feed,
+           CASE WHEN h.feed_raw IS NOT NULL THEN h.position_raw END AS position
+) AS p
 WHERE a.arrived_at >= ($1::date::timestamp AT TIME ZONE $2::text)
   AND a.arrived_at <  (($1::date + 1)::timestamp AT TIME ZONE $2::text)
 GROUP BY 2, 3, 4
@@ -216,6 +225,16 @@ async def aggregate(conn: asyncpg.Connection, day: dt.date) -> int:
     """Rebuild one service day's rollup from arrival_score."""
     status = await conn.execute(AGGREGATE_SQL, day, AGENCY_TZ)
     return int(status.split()[-1])
+
+
+async def reaggregate(conn: asyncpg.Connection, days: int) -> list[dt.date]:
+    """Rebuild the rollup for the last `days` service days from what
+    arrival_score still holds; for after a change to how it is aggregated."""
+    today = dt.datetime.now(dt.UTC).astimezone(ZoneInfo(AGENCY_TZ)).date()
+    rebuilt = [today - dt.timedelta(days=i) for i in range(days)]
+    for day in rebuilt:
+        await aggregate(conn, day)
+    return rebuilt
 
 
 async def prune(conn: asyncpg.Connection) -> dict[str, int]:
@@ -291,13 +310,19 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Score settled arrivals against both estimates")
     ap.add_argument("--hours", type=float, default=SCORE_LOOKBACK_H,
                     help="how far back to look (positions are kept 48h, samples 24h)")
+    ap.add_argument("--days", type=int,
+                    help="only rebuild the daily rollup for this many days")
     args = ap.parse_args()
 
     async def _main() -> None:
         pool = await db.connect()
         try:
             async with pool.acquire() as conn:
-                print(await run_once(conn, lookback_h=args.hours))
+                if args.days:
+                    days = await reaggregate(conn, args.days)
+                    print(f"rebuilt the rollup for {days[-1]} to {days[0]}")
+                else:
+                    print(await run_once(conn, lookback_h=args.hours))
         finally:
             await db.close()
 
