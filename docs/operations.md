@@ -126,20 +126,24 @@ restarts Postgres.
 
 ## Backup
 
-Only `arrival_score_daily` cannot be rebuilt; everything else is refetched or
-pruned inside its retention window. Dump it weekly, alongside the feed reload,
-and copy the directory off the box now and then:
+`deploy/backup.sh` runs nightly from the crontab. It dumps
+`arrival_score_daily`, the one table nothing can regenerate, and the last
+two days of `arrival_score`, which is kept for 60 days but built from 48
+hours of positions, so it can't be rebuilt either past that. Dumps older
+than two weeks are deleted from `backups/`.
 
-```bash
-mkdir -p backups && docker compose exec -T db pg_dump -U tracker -d tracker \
-    --data-only -t arrival_score_daily | gzip > backups/rollup-$(date +%F).sql.gz
-```
+Dumps on the same disk are not a backup. Set `BACKUP_URL` in `.env` to a
+bucket's pre-authenticated request URL (Oracle Object Storage: create a PAR
+on the bucket with object write permission, and use its URL up to and
+including `/o/`) and each file is uploaded with a plain `PUT`; nothing on
+the box needs credentials.
 
-In a crontab the `%` must be written `\%`. To restore into a fresh database,
-start the stack so the schema exists, then:
+To restore into a fresh database, start the stack so the schema exists, then:
 
 ```bash
 gunzip -c backups/rollup-2026-09-27.sql.gz | docker compose exec -T db psql -U tracker -d tracker
+gunzip -c backups/arrivals-2026-09-27.csv.gz | docker compose exec -T db psql -U tracker -d tracker \
+    -c "\copy arrival_score FROM STDIN WITH CSV HEADER"
 ```
 
 ## Caching

@@ -1,5 +1,5 @@
 # opc's crontab on the box (UTC). Install with: crontab deploy/crontab
-# Monday 04:00 UTC: reload the static feed (staged and swapped, no outage)
-0 4 * * 1 cd /opt/tracker && docker compose run --rm load >> /opt/tracker/load.log 2>&1
-# Monday 03:30 UTC: dump the rollup, the one table that can't be rebuilt
-30 3 * * 1 cd /opt/tracker && mkdir -p backups && docker compose exec -T db pg_dump -U tracker -d tracker --data-only -t arrival_score_daily 2>> backup.log | gzip > backups/rollup-$(date +\%F).sql.gz
+# 03:30 daily: dump the rollup and the last two days of arrivals, upload if BACKUP_URL is set
+30 3 * * * cd /opt/tracker && ./deploy/backup.sh >> backup.log 2>&1
+# Monday 04:00: reload the static feed (staged and swapped, no outage)
+0 4 * * 1 cd /opt/tracker && docker compose run --rm load >> load.log 2>&1
