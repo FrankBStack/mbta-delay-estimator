@@ -160,3 +160,17 @@ that from missed events and the rest from timing arrivals rather than departures
 finding no difference, so the November main version is the first fair test. The MBTA's departure-based
 gap is not the figure November should reproduce: an arrival-based test should come in below it even if
 the pattern is real, because flagged stops hold buses longer.
+
+## What November can and cannot settle (stated 2026-10-26, before any November data was read)
+
+The MBTA's complete September record (17 weekdays, `checks_mbta_record_gaps.py`, exploratory) suggests a
+lateness gap of about 3-4 points for minority areas (state criterion +3.7, interval -0.5 to +7.7; federal
+rule +4.1, +0.1 to +8.4). It disappears when stops are compared within the same route and direction (-0.8),
+so it comes from which routes serve those areas, not from where their stops sit along the routes.
+
+The pre-specified test of a between-route gap is H1, and under the state criterion it compares 139 flagged
+routes with only 13 unflagged ones: its October interval ran from -6.8 to +11.8 points. November's will be
+about as wide, and an arrival-based test should come in below the MBTA's departure-based figure even if the
+pattern is real. A November null on H1 therefore cannot rule out a 3-4 point gap between routes. The
+federal-rule secondary (58 unflagged routes) is the only route test with a realistic chance of detecting
+one, and it remains secondary. This study cannot settle the between-route question either way.
