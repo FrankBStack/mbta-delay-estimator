@@ -115,3 +115,26 @@ either side of the stop; logged from 2026-10-26, with October 26 rebuilt from re
 Both primaries are arrival-weighted and unadjusted, with 95% intervals that resample days and routes, and are
 supported if the interval excludes zero in the stated direction. H4a is dropped: its routes are headway-run
 and fall under H5.
+
+## Second amendment (fixed 2026-10-26, before any November data was read)
+
+`checks_coverage_bias.py` compared September 28-30 gaps on the MBTA's complete timepoint record with the same
+gaps on the events our log has. Our arrival log misses more events at unflagged stops (29.6% against 16.5%
+for the income criterion), and the missed events skew early. On the same events, our log shows an income
+early-arrival gap of +2.7 points against +0.6 in the MBTA's record, and unadjusted lateness gaps 3-4 points
+more favorable to flagged stops than the record shows. Within-route gaps moved by under about 1 point.
+Prediction error cannot be checked this way (the MBTA's file has no predictions), so its October results
+carry the same unmeasured risk.
+
+**How the November rerun of the eight primary tests counts buses.** Main version: the lateness tests (H1 on
+lateness, H2) count every bus that stopped (`arrival_score`) or went by (`stop_pass`); on October 26's
+finished trips the two together cover 95.6% of scheduled stop visits. A pass is late or early by
+`passed_at` against `scheduled_time`. Secondary version: arrivals only, exactly as run on October. The
+prediction-error tests (H1 on prediction error, H3) use arrivals only in both versions, since passes carry no
+prediction.
+
+**How H4 and H5 classify trips** (replaces the trip map above, so the MBTA's November file is not needed).
+A trip takes the MBTA's majority standard for its route, direction and scheduled hour in the MBTA's own
+September 2026 weekday records (`make_standard_rule.py`: 17 days, 1.56 million records, 97.7% agreeing with
+their cell's majority; MBTA "Outbound" is GTFS direction 0, checked on matched events). Cells with no records
+fall back to the route and direction's majority, then the route's, then the timetable standard.
