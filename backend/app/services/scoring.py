@@ -97,7 +97,8 @@ WITH arrivals AS (
     -- first STOPPED_AT report per vehicle, trip and stop, for arrivals inside
     -- the window; the earlier lookback catches a dwell that began before it
     SELECT vp.vehicle_id, vp.trip_id, vp.start_date,
-           vp.current_stop_sequence AS seq, min(vp.ts) AS arrived_at
+           vp.current_stop_sequence AS seq, min(vp.ts) AS arrived_at,
+           max(vp.ts) AS last_stopped_at
     FROM vehicle_position vp
     WHERE vp.current_status = 'STOPPED_AT'
       AND vp.trip_id IS NOT NULL AND vp.start_date IS NOT NULL
@@ -129,9 +130,11 @@ approached AS (
 ),
 scheduled AS (
     SELECT a.vehicle_id, a.trip_id, a.start_date, a.seq, a.arrived_at, a.direction_id,
+           a.last_stopped_at,
            COALESCE(a.route_id, t.route_id) AS route_id,
            COALESCE(a.stop_id, o.stop_id) AS stop_id,
-           gtfs_ts(a.start_date, o.arrival_s, $3::text) AS scheduled_time
+           gtfs_ts(a.start_date, o.arrival_s, $3::text) AS scheduled_time,
+           gtfs_ts(a.start_date, o.departure_s, $3::text) AS scheduled_departure
     FROM approached a
     -- an added trip's timetable is the scheduled trip it was matched to
     LEFT JOIN added_trip_match m ON m.trip_id = a.trip_id AND m.start_date = a.start_date
@@ -145,9 +148,12 @@ scheduled AS (
 )
 INSERT INTO arrival_score
     (vehicle_id, trip_id, route_id, direction_id, start_date, stop_sequence,
-     stop_id, scheduled_time, arrived_at, {_SCORE_COLS})
+     stop_id, scheduled_time, arrived_at, departed_at, scheduled_departure,
+     pred_300_at, pred_300_seq, {_SCORE_COLS})
 SELECT s.vehicle_id, s.trip_id, s.route_id, s.direction_id, s.start_date, s.seq,
-       s.stop_id, s.scheduled_time, s.arrived_at,
+       s.stop_id, s.scheduled_time, s.arrived_at, s.last_stopped_at, s.scheduled_departure,
+       max(smp.ts) FILTER (WHERE smp.horizon_s = 300),
+       max(smp.seq_at) FILTER (WHERE smp.horizon_s = 300),
        {_SCORE_PIVOT}
 FROM scheduled s
 -- each sampled reading, with the estimator's figure from the same moment.
@@ -155,7 +161,7 @@ FROM scheduled s
 -- scheduled at one row, and a self-join on that estimate re-derives every
 -- sample once per arrival
 LEFT JOIN LATERAL (
-    SELECT ps.horizon_s,
+    SELECT ps.horizon_s, ps.ts, v.seq_at,
            round(extract(epoch FROM ps.predicted_time - s.arrived_at))::int AS feed_error_s,
            CASE WHEN d.computed_delay_s IS NULL THEN NULL
                 ELSE round(extract(epoch FROM s.scheduled_time - s.arrived_at))::int
@@ -170,11 +176,21 @@ LEFT JOIN LATERAL (
         ORDER BY d.ts DESC
         LIMIT 1
     ) d ON true
+    -- where the vehicle was on this trip when the five-minute countdown was read;
+    -- NULL when it had not yet started the trip
+    LEFT JOIN LATERAL (
+        SELECT vp.current_stop_sequence AS seq_at
+        FROM vehicle_position vp
+        WHERE ps.horizon_s = 300 AND vp.vehicle_id = s.vehicle_id AND vp.trip_id = s.trip_id
+          AND vp.ts <= ps.ts AND vp.ts > ps.ts - interval '2 minutes'
+        ORDER BY vp.ts DESC
+        LIMIT 1
+    ) v ON true
     WHERE ps.trip_id = s.trip_id AND ps.start_date = s.start_date
       AND ps.stop_sequence = s.seq AND ps.ts < s.arrived_at
 ) smp ON true
 GROUP BY s.vehicle_id, s.trip_id, s.route_id, s.direction_id, s.start_date, s.seq,
-         s.stop_id, s.scheduled_time, s.arrived_at
+         s.stop_id, s.scheduled_time, s.arrived_at, s.last_stopped_at, s.scheduled_departure
 ON CONFLICT (vehicle_id, trip_id, start_date, stop_sequence) DO NOTHING
 RETURNING 1
 """

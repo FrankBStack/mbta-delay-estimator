@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS arrival_score (
     feed_1200      integer, position_1200 integer,
     UNIQUE (vehicle_id, trip_id, start_date, stop_sequence)
 );
+-- departed_at is the last STOPPED_AT report at the stop, so departures are
+-- recorded up to one report interval early. pred_300_at is when the
+-- five-minute countdown was sampled, pred_300_seq the stop the vehicle was at
+-- or heading to on this trip then (NULL if it had not started the trip)
+ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS departed_at timestamptz;
+ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS scheduled_departure timestamptz;
+ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS pred_300_at timestamptz;
+ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS pred_300_seq integer;
 CREATE INDEX IF NOT EXISTS arrival_score_arrived_idx ON arrival_score (arrived_at DESC);
 CREATE INDEX IF NOT EXISTS arrival_score_route_idx   ON arrival_score (route_id, arrived_at DESC);
 

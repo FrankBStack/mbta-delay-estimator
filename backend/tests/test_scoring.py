@@ -73,6 +73,25 @@ async def test_scores_both_estimates_against_the_arrival(conn):
     assert (other["feed_n"], other["arrivals"]) == (0, 1)
 
 
+async def test_records_the_departure_and_where_the_five_minute_countdown_was_read(conn):
+    # heading to ST2 at 05:00:30 when the countdown read five minutes
+    await observe(conn, at(18030), -71.097, seq=2, status="IN_TRANSIT_TO")
+    await sample(conn, 2, 300, at(18040), at(18340))
+    # stopped at ST2 from 05:06:00, last seen stopped 05:06:45, then moving on
+    await observe(conn, at(18360), -71.09, seq=2, status="STOPPED_AT")
+    await observe(conn, at(18375), -71.09, seq=2, status="STOPPED_AT")
+    await observe(conn, at(18405), -71.09, seq=2, status="STOPPED_AT")
+    await observe(conn, at(18420), -71.088, seq=3, status="IN_TRANSIT_TO")
+
+    assert await scoring.score(conn, at(18000), at(19000)) == 1
+    row = await conn.fetchrow("SELECT * FROM arrival_score")
+    assert row["arrived_at"] == at(18360)
+    assert row["departed_at"] == at(18405)
+    assert row["scheduled_departure"] == at(18360)
+    assert row["feed_300"] == -20
+    assert (row["pred_300_at"], row["pred_300_seq"]) == (at(18040), 2)
+
+
 async def test_the_arrival_itself_never_scores_the_position_estimate(conn):
     # approaching ST2, then a one-minute countdown issued at 05:05:20 with no
     # position report near it, then the arrival 40s later. The arrival is the
