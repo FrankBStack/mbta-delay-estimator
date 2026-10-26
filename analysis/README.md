@@ -82,3 +82,36 @@ unchanged on the second export, and the eight primary tests are reported again. 
 - **H4b (secondary).** Within route x direction x position cells, the gap is indistinguishable from zero.
 
 Decision rule: H4 is supported if its 95% interval excludes zero in the stated direction.
+
+## Amendment to the November hypotheses (fixed 2026-10-26, before any November data was read)
+
+Two problems found on 2026-10-26 with the MBTA's own September 28-30 timepoint records
+(`checks_mbta_september.py`, `checks_schedule_standard.py`):
+
+- Routes 15, 23 and 66, which drove the October early-arrival gap, are on the MBTA's headway standard
+  (about 99% of their timepoint records): the agency judges them by gaps between buses, not by the timetable.
+  Flagged stops sit on headway-run trips far more often than unflagged stops (income criterion: 39.7% of
+  arrivals against 24.8%).
+- Buses that pass a stop without stopping are not logged. Unlogged MBTA timepoint departures are more often
+  early (11.5% against 7.1%), and more are missed at unflagged stops (29.6% against 16.5%).
+
+H4, H4a and H4b above are replaced by the following. Each trip is judged by its own MBTA standard, taken from
+the MBTA's file: `data/trip_standard.csv` maps GTFS trip ids to the standard of their matched September 28-30
+timepoint events; trips not in it take their route's majority standard in that file.
+
+A bus's time at a stop is its last stopped report (`departed_at`) or, for a bus that passed without stopping,
+the pass time (`stop_pass.passed_at`, interpolated along the route shape between the position reports on
+either side of the stop; logged from 2026-10-26, with October 26 rebuilt from retained positions).
+
+- **H4 (amended, primary).** On timetable-run trips (schedule standard), stops in block groups meeting the
+  state Environmental Justice income criterion have a higher share of buses leaving more than 60 s before the
+  scheduled departure than other stops.
+- **H5 (new, primary).** On headway-run trips (headway standard), the same stops have a higher share of long
+  gaps: time since the previous bus on the same route and direction at the stop more than 1.5 times the
+  scheduled gap to the previous *scheduled* trip, so dropped trips count as long gaps. The 1.5 threshold
+  follows the MBTA's earlier Service Delivery Policy (150% of scheduled headway).
+- **H4b, H5b (secondary).** The same comparisons within route x direction x position cells.
+
+Both primaries are arrival-weighted and unadjusted, with 95% intervals that resample days and routes, and are
+supported if the interval excludes zero in the stated direction. H4a is dropped: its routes are headway-run
+and fall under H5.
