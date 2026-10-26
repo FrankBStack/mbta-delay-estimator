@@ -138,3 +138,25 @@ A trip takes the MBTA's majority standard for its route, direction and scheduled
 September 2026 weekday records (`make_standard_rule.py`: 17 days, 1.56 million records, 97.7% agreeing with
 their cell's majority; MBTA "Outbound" is GTFS direction 0, checked on matched events). Cells with no records
 fall back to the route and direction's majority, then the route's, then the timetable standard.
+
+## Third amendment (fixed 2026-10-26, before any November data was read)
+
+**Prediction tests count passes too.** Riders at a stop a bus goes by still saw its countdown, so a
+five-minute prediction exists for passed stops. Since tracker commit e4a52ae (fix 77841c2), `stop_pass`
+stores it (`pred_300_at`, `feed_300` = predicted minus passed time); October 26 was rebuilt while the
+server still held that day's samples, and 96.2% of its passes carry one. For the November rerun, H1 on
+prediction error and H3 use arrivals plus passes as the main version and arrivals only as the secondary,
+like the lateness tests.
+
+**Coverage is reported with every November result.** For flagged and unflagged stops separately: the share
+of scheduled stop visits on trips that ran with an arrival, with a pass, and with neither; and the share
+of scheduled trips with no logged event at all (trips that never ran or were never tracked). On October
+26's finished trips that ran, 77.2% of scheduled visits had an arrival, 18.4% a pass and 4.4% neither.
+
+**How the October results are to be read.** The October lateness tests (H1 and H2 on lateness) used a log
+now known to understate flagged stops' lateness relative to the MBTA's complete record (by 2.8 points for
+the income criterion and 3.9 for minority on the September 28-30 timepoint events; about three quarters of
+that from missed events and the rest from timing arrivals rather than departures). They were biased toward
+finding no difference, so the November main version is the first fair test. The MBTA's departure-based
+gap is not the figure November should reproduce: an arrival-based test should come in below it even if
+the pattern is real, because flagged stops hold buses longer.
