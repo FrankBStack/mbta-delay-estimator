@@ -1,0 +1,4 @@
+SET default_transaction_read_only = on;
+SET max_parallel_workers_per_gather = 0;
+SET statement_timeout = '1800s';
+\copy (SELECT a.start_date, a.route_id, a.direction_id, a.trip_id, t.shape_id, a.stop_sequence, a.stop_id, a.scheduled_time, a.arrived_at, round(extract(epoch FROM a.arrived_at - a.scheduled_time))::int AS late_s, a.feed_60, a.feed_120, a.feed_300, a.feed_600, a.position_300, o.frac, o.arrival_s - og.origin_dep_s AS sched_s_from_origin FROM arrival_score a JOIN route r USING (route_id) LEFT JOIN trip t ON t.trip_id = a.trip_id LEFT JOIN trip_stop_offset o ON o.trip_id = a.trip_id AND o.stop_sequence = a.stop_sequence LEFT JOIN (SELECT DISTINCT ON (trip_id) trip_id, departure_s AS origin_dep_s FROM trip_stop_offset ORDER BY trip_id, stop_sequence) og ON og.trip_id = a.trip_id WHERE r.route_type = 3 AND a.start_date BETWEEN '2026-09-28' AND '2026-10-23') TO STDOUT WITH CSV HEADER
