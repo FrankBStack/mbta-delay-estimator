@@ -103,6 +103,19 @@ async def test_a_bus_that_goes_by_without_stopping_is_a_pass(conn):
     assert (row["stop_sequence"], row["stop_id"]) == (2, "ST2")
     assert row["passed_at"] == at(18300)
     assert (row["scheduled_time"], row["scheduled_departure"]) == (at(18300), at(18360))
+    assert row["feed_300"] is None
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 0
+
+
+async def test_a_pass_carries_the_five_minute_countdown_even_when_recorded_late(conn):
+    await observe(conn, at(18200), -71.095, seq=2, status="IN_TRANSIT_TO")
+    await observe(conn, at(18400), -71.085, seq=3, status="IN_TRANSIT_TO")
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 1
+    # the sample arrives after the pass was first written; a rerun fills it in once
+    await sample(conn, 2, 300, at(18000), at(18280))
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 1
+    row = await conn.fetchrow("SELECT * FROM stop_pass")
+    assert (row["pred_300_at"], row["feed_300"]) == (at(18000), -20)
     assert await scoring.record_passes(conn, at(18000), at(19000)) == 0
 
 

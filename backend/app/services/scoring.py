@@ -238,16 +238,28 @@ located AS (
         SELECT 1 FROM vehicle_position p
         WHERE p.trip_id = g.trip_id AND p.vehicle_id = g.vehicle_id AND p.start_date = g.start_date
           AND p.current_stop_sequence = g.seq AND p.current_status = 'STOPPED_AT')
+),
+timed AS (
+    SELECT *, ts + (next_ts - ts) * CASE WHEN f2 > f1
+                                         THEN least(greatest((fs - f1) / (f2 - f1), 0), 1)
+                                         ELSE 0.5 END AS passed_at
+    FROM located
 )
+-- the countdown riders at the stop saw five minutes out; a rerun fills it in
+-- for rows written before it was recorded, while the sample is still held
 INSERT INTO stop_pass
     (vehicle_id, trip_id, start_date, stop_sequence, stop_id, route_id, direction_id,
-     scheduled_time, scheduled_departure, passed_at)
-SELECT vehicle_id, trip_id, start_date, seq, stop_id, route_id, direction_id,
-       scheduled_time, scheduled_departure,
-       ts + (next_ts - ts) * CASE WHEN f2 > f1 THEN least(greatest((fs - f1) / (f2 - f1), 0), 1)
-                                  ELSE 0.5 END
-FROM located
-ON CONFLICT (vehicle_id, trip_id, start_date, stop_sequence) DO NOTHING
+     scheduled_time, scheduled_departure, passed_at, pred_300_at, feed_300)
+SELECT t.vehicle_id, t.trip_id, t.start_date, t.seq, t.stop_id, t.route_id, t.direction_id,
+       t.scheduled_time, t.scheduled_departure, t.passed_at, ps.ts,
+       round(extract(epoch FROM ps.predicted_time - t.passed_at))::int
+FROM timed t
+LEFT JOIN prediction_sample ps
+  ON ps.trip_id = t.trip_id AND ps.start_date = t.start_date
+ AND ps.stop_sequence = t.seq AND ps.horizon_s = 300 AND ps.ts < t.passed_at
+ON CONFLICT (vehicle_id, trip_id, start_date, stop_sequence) DO UPDATE
+    SET pred_300_at = EXCLUDED.pred_300_at, feed_300 = EXCLUDED.feed_300
+    WHERE stop_pass.feed_300 IS NULL AND EXCLUDED.feed_300 IS NOT NULL
 RETURNING 1
 """
 

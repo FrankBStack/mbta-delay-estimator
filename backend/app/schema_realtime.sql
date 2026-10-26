@@ -153,6 +153,9 @@ CREATE TABLE IF NOT EXISTS stop_pass (
     UNIQUE (vehicle_id, trip_id, start_date, stop_sequence)
 );
 CREATE INDEX IF NOT EXISTS stop_pass_passed_idx ON stop_pass (passed_at DESC);
+-- the five-minute countdown riders at the stop saw, and its error against the pass
+ALTER TABLE stop_pass ADD COLUMN IF NOT EXISTS pred_300_at timestamptz;
+ALTER TABLE stop_pass ADD COLUMN IF NOT EXISTS feed_300 integer;
 CREATE INDEX IF NOT EXISTS arrival_score_arrived_idx ON arrival_score (arrived_at DESC);
 CREATE INDEX IF NOT EXISTS arrival_score_route_idx   ON arrival_score (route_id, arrived_at DESC);
 
