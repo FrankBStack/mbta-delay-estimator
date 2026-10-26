@@ -136,6 +136,23 @@ ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS departed_at timestamptz;
 ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS scheduled_departure timestamptz;
 ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS pred_300_at timestamptz;
 ALTER TABLE arrival_score ADD COLUMN IF NOT EXISTS pred_300_seq integer;
+-- A bus that went by a stop without a STOPPED_AT report (it passed, or stopped
+-- too briefly to be seen stopped): the time is interpolated along the shape
+-- between the reports either side. Kept as long as arrival_score.
+CREATE TABLE IF NOT EXISTS stop_pass (
+    vehicle_id          text NOT NULL,
+    trip_id             text NOT NULL,
+    start_date          date NOT NULL,
+    stop_sequence       integer NOT NULL,
+    stop_id             text,
+    route_id            text,
+    direction_id        smallint,
+    scheduled_time      timestamptz,
+    scheduled_departure timestamptz,
+    passed_at           timestamptz NOT NULL,
+    UNIQUE (vehicle_id, trip_id, start_date, stop_sequence)
+);
+CREATE INDEX IF NOT EXISTS stop_pass_passed_idx ON stop_pass (passed_at DESC);
 CREATE INDEX IF NOT EXISTS arrival_score_arrived_idx ON arrival_score (arrived_at DESC);
 CREATE INDEX IF NOT EXISTS arrival_score_route_idx   ON arrival_score (route_id, arrived_at DESC);
 

@@ -196,6 +196,71 @@ RETURNING 1
 """
 
 
+# Buses that go by a stop without a STOPPED_AT report: between two consecutive
+# reports a bus passes every stop from the one it was heading for (or the next,
+# if it was stopped) up to the one before the next report's. The pass time is
+# interpolated along the shape; where the fractions run backwards (loops), the
+# midpoint of the two reports stands in.
+PASS_SQL = """
+WITH reports AS (
+    SELECT vp.vehicle_id, vp.trip_id, vp.start_date, vp.ts, vp.current_status AS status,
+           vp.current_stop_sequence AS seq, vp.geom_p,
+           lead(vp.ts) OVER w AS next_ts,
+           lead(vp.current_stop_sequence) OVER w AS next_seq,
+           lead(vp.geom_p) OVER w AS next_geom
+    FROM vehicle_position vp
+    WHERE vp.trip_id IS NOT NULL AND vp.start_date IS NOT NULL
+      AND vp.current_stop_sequence IS NOT NULL
+      AND vp.route_id IN (SELECT route_id FROM route WHERE route_type = 3)
+      AND vp.ts >= $1::timestamptz - interval '30 minutes' AND vp.ts < $2::timestamptz
+    WINDOW w AS (PARTITION BY vp.vehicle_id, vp.trip_id, vp.start_date ORDER BY vp.ts)
+),
+gone_by AS (
+    SELECT r.vehicle_id, r.trip_id, r.start_date, r.ts, r.next_ts, r.geom_p, r.next_geom, s.seq
+    FROM reports r
+    CROSS JOIN LATERAL generate_series(
+        CASE WHEN r.status = 'STOPPED_AT' THEN r.seq + 1 ELSE r.seq END, r.next_seq - 1) AS s(seq)
+    WHERE r.next_ts >= $1::timestamptz AND r.next_seq > r.seq AND r.next_seq - r.seq <= 20
+      AND r.next_ts - r.ts <= interval '5 minutes'
+),
+located AS (
+    SELECT g.*, t.route_id, t.direction_id, o.stop_id, o.frac AS fs,
+           ST_LineLocatePoint(sh.geom_p, g.geom_p) AS f1,
+           ST_LineLocatePoint(sh.geom_p, g.next_geom) AS f2,
+           gtfs_ts(g.start_date, o.arrival_s, $3::text) AS scheduled_time,
+           gtfs_ts(g.start_date, o.departure_s, $3::text) AS scheduled_departure
+    FROM gone_by g
+    JOIN trip t ON t.trip_id = g.trip_id
+    JOIN shape sh ON sh.shape_id = t.shape_id
+    JOIN trip_stop_offset o ON o.trip_id = g.trip_id AND o.stop_sequence = g.seq
+    WHERE g.seq > (SELECT min(stop_sequence) FROM trip_stop_offset WHERE trip_id = g.trip_id)
+      AND NOT EXISTS (
+        SELECT 1 FROM vehicle_position p
+        WHERE p.trip_id = g.trip_id AND p.vehicle_id = g.vehicle_id AND p.start_date = g.start_date
+          AND p.current_stop_sequence = g.seq AND p.current_status = 'STOPPED_AT')
+)
+INSERT INTO stop_pass
+    (vehicle_id, trip_id, start_date, stop_sequence, stop_id, route_id, direction_id,
+     scheduled_time, scheduled_departure, passed_at)
+SELECT vehicle_id, trip_id, start_date, seq, stop_id, route_id, direction_id,
+       scheduled_time, scheduled_departure,
+       ts + (next_ts - ts) * CASE WHEN f2 > f1 THEN least(greatest((fs - f1) / (f2 - f1), 0), 1)
+                                  ELSE 0.5 END
+FROM located
+ON CONFLICT (vehicle_id, trip_id, start_date, stop_sequence) DO NOTHING
+RETURNING 1
+"""
+
+
+async def record_passes(conn: asyncpg.Connection, since: dt.datetime, until: dt.datetime) -> int:
+    """Write a stop_pass row for every bus that went by a stop in [since, until)
+    without stopping."""
+    async with conn.transaction():
+        await conn.execute(f"SET LOCAL statement_timeout = {int(SCORE_TIMEOUT_S * 1000)}")
+        rows = await conn.fetch(PASS_SQL, since, until, AGENCY_TZ)
+    return len(rows)
+
+
 async def score(conn: asyncpg.Connection, since: dt.datetime, until: dt.datetime) -> int:
     """Write a row for every not-yet-scored arrival in [since, until). A pass
     that runs past SCORE_TIMEOUT_S is abandoned and retried next time: one that
@@ -266,9 +331,14 @@ async def prune(conn: asyncpg.Connection) -> dict[str, int]:
         "DELETE FROM arrival_score WHERE arrived_at < now() - ($1 || ' days')::interval",
         str(SCORE_RETENTION_DAYS),
     )
+    passes = await conn.execute(
+        "DELETE FROM stop_pass WHERE passed_at < now() - ($1 || ' days')::interval",
+        str(SCORE_RETENTION_DAYS),
+    )
     return {
         "prediction_sample": int(samples.split()[-1]),
         "arrival_score": int(scores.split()[-1]),
+        "stop_pass": int(passes.split()[-1]),
     }
 
 
@@ -298,13 +368,15 @@ async def run_once(
         str(max(HORIZONS_S)),
     )
     if floor is None:
-        return {"scored": 0, "days": [], "pruned": pruned}
+        return {"scored": 0, "passed": 0, "days": [], "pruned": pruned}
     since = max(since, floor)
     scored = await score(conn, since, until) if since < until else 0
+    passed = await record_passes(conn, since, until) if since < until else 0
     days = service_days(since, until)
     for day in days:
         await aggregate(conn, day)
-    return {"scored": scored, "days": [d.isoformat() for d in days], "pruned": pruned}
+    return {"scored": scored, "passed": passed, "days": [d.isoformat() for d in days],
+            "pruned": pruned}
 
 
 async def run_forever() -> None:
@@ -315,8 +387,8 @@ async def run_forever() -> None:
             STATE["last_score"] = dt.datetime.now(dt.UTC)
             STATE["last_score_error"] = None
             log.info(
-                "scored %d arrivals, rolled up %s, pruned %d samples",
-                r["scored"], ", ".join(r["days"]), r["pruned"]["prediction_sample"],
+                "scored %d arrivals and %d passes, rolled up %s, pruned %d samples",
+                r["scored"], r["passed"], ", ".join(r["days"]), r["pruned"]["prediction_sample"],
             )
         except asyncio.CancelledError:
             raise

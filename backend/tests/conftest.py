@@ -82,6 +82,6 @@ async def db():
 async def conn(db):
     await db.execute(
         "TRUNCATE vehicle_position, trip_update, delay_observation, prediction_sample,"
-        " arrival_score, arrival_score_daily, added_trip_match RESTART IDENTITY"
+        " arrival_score, arrival_score_daily, added_trip_match, stop_pass RESTART IDENTITY"
     )
     return db

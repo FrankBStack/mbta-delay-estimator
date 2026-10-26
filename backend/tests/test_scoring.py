@@ -92,6 +92,28 @@ async def test_records_the_departure_and_where_the_five_minute_countdown_was_rea
     assert (row["pred_300_at"], row["pred_300_seq"]) == (at(18040), 2)
 
 
+async def test_a_bus_that_goes_by_without_stopping_is_a_pass(conn):
+    # a quarter of the way along at 05:03:20 heading for ST2, three quarters at
+    # 05:06:40 heading for ST3: it went by ST2, halfway along, at 05:05:00
+    await observe(conn, at(18200), -71.095, seq=2, status="IN_TRANSIT_TO")
+    await observe(conn, at(18400), -71.085, seq=3, status="IN_TRANSIT_TO")
+
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 1
+    row = await conn.fetchrow("SELECT * FROM stop_pass")
+    assert (row["stop_sequence"], row["stop_id"]) == (2, "ST2")
+    assert row["passed_at"] == at(18300)
+    assert (row["scheduled_time"], row["scheduled_departure"]) == (at(18300), at(18360))
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 0
+
+
+async def test_a_stop_seen_stopped_at_or_the_origin_is_never_a_pass(conn):
+    await observe(conn, at(17990), -71.10, seq=1, status="IN_TRANSIT_TO")
+    await observe(conn, at(18200), -71.095, seq=2, status="IN_TRANSIT_TO")
+    await observe(conn, at(18300), -71.09, seq=2, status="STOPPED_AT")
+    await observe(conn, at(18420), -71.088, seq=3, status="IN_TRANSIT_TO")
+    assert await scoring.record_passes(conn, at(17900), at(19000)) == 0
+
+
 async def test_the_arrival_itself_never_scores_the_position_estimate(conn):
     # approaching ST2, then a one-minute countdown issued at 05:05:20 with no
     # position report near it, then the arrival 40s later. The arrival is the
