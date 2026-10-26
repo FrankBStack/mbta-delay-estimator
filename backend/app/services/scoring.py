@@ -239,11 +239,15 @@ located AS (
         WHERE p.trip_id = g.trip_id AND p.vehicle_id = g.vehicle_id AND p.start_date = g.start_date
           AND p.current_stop_sequence = g.seq AND p.current_status = 'STOPPED_AT')
 ),
+-- a vehicle whose reported stop steps back and forward again goes by the
+-- same stop twice; the first time counts
 timed AS (
-    SELECT *, ts + (next_ts - ts) * CASE WHEN f2 > f1
+    SELECT DISTINCT ON (vehicle_id, trip_id, start_date, seq)
+           *, ts + (next_ts - ts) * CASE WHEN f2 > f1
                                          THEN least(greatest((fs - f1) / (f2 - f1), 0), 1)
                                          ELSE 0.5 END AS passed_at
     FROM located
+    ORDER BY vehicle_id, trip_id, start_date, seq, ts
 )
 -- the countdown riders at the stop saw five minutes out; a rerun fills it in
 -- for rows written before it was recorded, while the sample is still held

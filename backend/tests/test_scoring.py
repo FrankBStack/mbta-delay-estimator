@@ -119,6 +119,17 @@ async def test_a_pass_carries_the_five_minute_countdown_even_when_recorded_late(
     assert await scoring.record_passes(conn, at(18000), at(19000)) == 0
 
 
+async def test_a_stop_gone_by_twice_is_one_pass_at_the_first(conn):
+    await observe(conn, at(18200), -71.095, seq=2, status="IN_TRANSIT_TO")
+    await observe(conn, at(18400), -71.085, seq=3, status="IN_TRANSIT_TO")
+    await observe(conn, at(18415), -71.0849, seq=2, status="IN_TRANSIT_TO")
+    await observe(conn, at(18430), -71.0848, seq=3, status="IN_TRANSIT_TO")
+    await sample(conn, 2, 300, at(18000), at(18280))
+    assert await scoring.record_passes(conn, at(18000), at(19000)) == 1
+    row = await conn.fetchrow("SELECT passed_at, feed_300 FROM stop_pass")
+    assert (row["passed_at"], row["feed_300"]) == (at(18300), -20)
+
+
 async def test_a_stop_seen_stopped_at_or_the_origin_is_never_a_pass(conn):
     await observe(conn, at(17990), -71.10, seq=1, status="IN_TRANSIT_TO")
     await observe(conn, at(18200), -71.095, seq=2, status="IN_TRANSIT_TO")
