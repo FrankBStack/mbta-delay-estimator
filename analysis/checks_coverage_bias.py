@@ -30,6 +30,11 @@ m["logged"] = m.late_s.notna()
 sb = pd.read_csv("data/stops_bg.csv", dtype={"stop_id": str}).set_index("stop_id")
 m["route_dir"] = m.route_id + "|" + m.direction_id
 routes = m.route_id.unique()
+lg = m[m.logged]
+d = lg.mbta_late_s - lg.late_s
+print(f"matched {lg.shape[0]:,} of {len(m):,} ({100 * m.logged.mean():.1f}%); MBTA departure minus our arrival: "
+      f"median {d.median():.0f} s, ours later {100 * (d < 0).mean():.1f}%; "
+      f"Spearman {lg.mbta_late_s.corr(lg.late_s, method='spearman'):.3f}")
 
 
 def gap(df, val, crit, within):
@@ -66,3 +71,21 @@ out = pd.DataFrame(rows)
 out.to_csv("output/window1_v2/table_coverage_bias.csv", index=False)
 out["txt"] = out.apply(lambda r: f"{r.gap:+.1f} ({r.lo:+.1f}, {r.hi:+.1f})", axis=1)
 print(out.pivot_table(index=["criterion", "measure", "level"], columns="version", values="txt", aggfunc="first")[["complete", "logged", "ours"]].to_string())
+
+# the three versions share departures, so their differences are resampled together
+print("\npaired differences, unadjusted (points): coverage = logged - complete, timing = ours - logged, total = ours - complete")
+for crit in ["ej_income", "ej_minority"]:
+    for meas, thr in [("late", 300), ("early", -60)]:
+        m["v_mbta"] = ((m.mbta_late_s > thr) if meas == "late" else (m.mbta_late_s < thr)).astype(float)
+        m["v_ours"] = ((m.late_s > thr) if meas == "late" else (m.late_s < thr)).astype(float)
+        by_route = {r: g for r, g in m.groupby("route_id")}
+
+        def parts(df):
+            lg = df[df.logged]
+            c, lo, ou = gap(df, "v_mbta", crit, False), gap(lg, "v_mbta", crit, False), gap(lg, "v_ours", crit, False)
+            return 100 * np.array([lo - c, ou - lo, ou - c])
+
+        pt = parts(m)
+        bs = np.array([parts(pd.concat([by_route[r] for r in rng.choice(routes, len(routes))])) for _ in range(400)])
+        lo, hi = np.percentile(bs, 2.5, axis=0), np.percentile(bs, 97.5, axis=0)
+        print(f"{crit:12s} {meas:5s} " + "  ".join(f"{n} {p:+.1f} ({a:+.1f}, {b:+.1f})" for n, p, a, b in zip(["coverage", "timing", "total"], pt, lo, hi)))
