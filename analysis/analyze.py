@@ -51,6 +51,14 @@ def load(path):
     return a
 
 
+def gtfs_route_id(r):
+    """The MBTA's performance files name routes by zero-padded short name ("01", "SL1"); GTFS ids differ."""
+    names = pd.read_csv(D + "routes.csv", dtype=str).dropna(subset=["route_short_name"])
+    by_name = dict(zip(names.route_short_name, names.route_id))
+    u = pd.Series(r.unique())
+    return r.map(dict(zip(u, u.map(lambda x: by_name.get(x.lstrip("0") if x.isdigit() else x, x)))))
+
+
 def stop_attributes(sb):
     s = sb.copy()
     for c in CRITERIA:

@@ -8,10 +8,12 @@ Overall (arrival-weighted) and within route x direction cells; intervals resampl
 """
 import numpy as np
 import pandas as pd
+import analyze as an
 
 rng = np.random.default_rng(20261026)
 DAYS = ["2026-09-28", "2026-09-29", "2026-09-30"]
 m = pd.read_parquet("data/mbta_ad_sep28_30.parquet")
+m["route_id"] = an.gtfs_route_id(m.route_id)
 sch = pd.to_datetime(m.scheduled.str[11:19], format="%H:%M:%S"); m["tod"] = sch.dt.hour * 3600 + sch.dt.minute * 60 + sch.dt.second
 act = pd.to_datetime(m.actual.str[11:19], format="%H:%M:%S", errors="coerce"); m["act_tod"] = act.dt.hour * 3600 + act.dt.minute * 60 + act.dt.second
 m = m[(m.point_type == "Midpoint") & m.act_tod.notna()].copy()
