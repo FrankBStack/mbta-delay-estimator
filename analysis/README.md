@@ -174,3 +174,26 @@ about as wide, and an arrival-based test should come in below the MBTA's departu
 pattern is real. A November null on H1 therefore cannot rule out a 3-4 point gap between routes. The
 federal-rule secondary (58 unflagged routes) is the only route test with a realistic chance of detecting
 one, and it remains secondary. This study cannot settle the between-route question either way.
+
+## Correction (2026-10-27)
+
+`checks_mbta_september.py` and `checks_coverage_bias.py` joined the MBTA's records to our log on the raw
+route id, but the MBTA's file names routes by zero-padded short name ("01", "SL1", "CT3") where GTFS uses
+"1", "741", "708". Records for routes 1, 4, 7, 8, 9, the Silver Line and CT3 (14% of September 28-30
+mid-route departures) could never match, so they were counted as missed. Both scripts now map the ids
+(`analyze.gtfs_route_id`). Corrected figures for September 28-30:
+
+- 84.7% of mid-route timepoint departures match a logged arrival (not 75%); unmatched departures are more
+  often early (12.9% against 7.4%) and twice as common at unflagged stops (income 17.6% against 8.8%,
+  minority 28.9% against 11.8%).
+- The log understates the unadjusted lateness gap by 1.4 points (income, paired interval 0.2 to 2.6) and 1.8
+  (minority, -0.7 to 4.3), not 2.8 and 3.9; about three quarters and half of that, respectively, from missed
+  events. The log overstates the income early-arrival gap by 1.2 points (+0.2 to +2.4). Within-route gaps move by
+  half a point or less. The log's income early-arrival gap on these days is +1.8 (not +2.7) against +0.6 in
+  the MBTA's record.
+
+The direction of every finding is unchanged, and no pre-registered decision depended on the size of the
+bias. The H4/H5 classification rule (`make_standard_rule.py`) keys its cells on the MBTA's route ids, so the
+November code must map them with `analyze.gtfs_route_id` before joining to GTFS trips; without it, routes 1,
+4, 7, 8, 9, the Silver Line and CT3 would silently fall back to the timetable standard. With the mapping
+and each trip's first scheduled hour, 40.4% of October weekday arrivals are on headway-standard trips.
