@@ -9,6 +9,7 @@ import geopandas as gpd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import patheffects
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from shapely import wkt
@@ -18,6 +19,10 @@ SEQ = ["#b7d3f6", "#6da7ec", "#2a78d6", "#184f95", "#0d366b"]   # blue ramp, ste
 HOT, COLD, NS = "#e34948", "#2a78d6", "#c3c2b7"
 INK, MUTED, GRID = "#0b0b0b", "#898781", "#e1e0d9"
 EJ_INCOME, EJ_MINORITY = "#f9d2c2", "#dcebfa"
+# places named in the paper's hot spot paragraphs: label, lon, lat, label offset in points
+PLACES = [("Newton", -71.2369, 42.3442, -14, 20), ("Lynn", -70.9545, 42.4700, 26, -22),
+          ("Marblehead", -70.865, 42.497, 0, 18), ("East Boston and Chelsea", -71.0224, 42.3835, 34, -14),
+          ("Roxbury Crossing", -71.0936, 42.3304, -34, -8)]
 plt.rcParams.update({"font.family": "sans-serif", "font.size": 9, "axes.edgecolor": GRID, "text.color": INK})
 
 
@@ -63,6 +68,15 @@ def hotspot_layer(ax, hs, col):
         sel = hs[cls == k]
         ax.scatter(sel.x, sel.y, s=7, c=c, linewidths=0, zorder=z)
     return int((cls == "hot").sum()), int((cls == "cold").sum())
+
+
+def place_labels(ax):
+    pts = gpd.GeoSeries(gpd.points_from_xy([p[1] for p in PLACES], [p[2] for p in PLACES]), crs=4326).to_crs(26986)
+    for (name, _, _, dx, dy), pt in zip(PLACES, pts):
+        ax.annotate(name, (pt.x, pt.y), xytext=(dx, dy), textcoords="offset points", fontsize=8, color=INK, zorder=6,
+                    ha="left" if dx > 0 else "right" if dx < 0 else "center", va="center",
+                    arrowprops=dict(arrowstyle="-", color=INK, linewidth=0.6, shrinkA=1, shrinkB=5),
+                    path_effects=[patheffects.withStroke(linewidth=2.5, foreground="white")])
 
 
 def main(outdir):
@@ -112,6 +126,7 @@ def main(outdir):
         bg[bg.ej_income].plot(ax=ax, color=EJ_INCOME, linewidth=0, zorder=0)
         base(ax, net, bounds)
         h, c = hotspot_layer(ax, hs, col)
+        place_labels(ax)
         ax.set_title(f"{title}: {h} hot, {c} cold", loc="left", fontsize=11, color=INK)
     handles = [Line2D([], [], marker="o", linestyle="", markersize=6, color=HOT, label="Hot spot"),
                Line2D([], [], marker="o", linestyle="", markersize=6, color=COLD, label="Cold spot"),
