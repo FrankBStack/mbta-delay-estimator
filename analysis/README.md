@@ -197,3 +197,8 @@ bias. The H4/H5 classification rule (`make_standard_rule.py`) keys its cells on 
 November code must map them with `analyze.gtfs_route_id` before joining to GTFS trips; without it, routes 1,
 4, 7, 8, 9, the Silver Line and CT3 would silently fall back to the timetable standard. With the mapping
 and each trip's first scheduled hour, 40.4% of October weekday arrivals are on headway-standard trips.
+
+This correction was made on 2026-10-27, after the November tests were fixed (tags `capstone-prespec-2026-10-26`
+to `capstone-prespec-2026-10-26d`) and after the replication window began. It changes only how the MBTA's
+records are matched, to our log and to GTFS route ids. No hypothesis, measure, threshold or decision rule
+changes, and no data from the replication window was used in finding or checking it.
