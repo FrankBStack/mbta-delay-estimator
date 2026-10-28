@@ -202,3 +202,29 @@ This correction was made on 2026-10-27, after the November tests were fixed (tag
 to `capstone-prespec-2026-10-26d`) and after the replication window began. It changes only how the MBTA's
 records are matched, to our log and to GTFS route ids. No hypothesis, measure, threshold or decision rule
 changes, and no data from the replication window was used in finding or checking it.
+
+## October MBTA-record test (fixed 2026-10-27, before the MBTA published its October 2026 file)
+
+The MBTA's complete September record (`checks_mbta_record_gaps.py`, exploratory; see the section above) suggests
+a lateness gap between routes for minority areas that this study's log-based tests cannot settle. This section
+fixes a test of it on the MBTA's October 2026 Bus Arrival Departure Times file, which had not been published when
+this was written. The test days are the October days of the first analysis window, so they overlap neither the
+September record that suggested the hypothesis nor the November replication window. Our log captured about 85% of
+such departures on September 28-30, and its October results are already known; what is new is the MBTA's
+complete record of these days, which the log's gaps understate (see the correction above).
+
+- **H6 (primary).** On weekdays from October 1 to 23, 2026, excluding October 12, mid-route timepoint
+  departures at stops in block groups flagged under the federal Title VI rule (minority share above the
+  service area's 43.8%, `fta_minority`) are more often more than five minutes late than departures at other
+  stops. The gap is flagged minus unflagged, over all trips, unadjusted, each departure counted once.
+  September: +4.1 points (+0.1 to +8.4).
+- **Decision rule.** H6 is supported if the lower end of its 95% interval is above zero. Intervals resample
+  service days and routes together (500 draws).
+- **Secondary, reported but not tested.** The same gap under the state minority and income criteria; within
+  route and direction (September, federal rule: -0.1); on timetable-run trips only; and early departures.
+
+Run, after downloading the 2026 file again once it includes October:
+`python checks_mbta_record_gaps.py 2026-10 2026-10-01 2026-10-23 2026-10-12`. The script is the one that produced
+the September figures, with options added for the last day and for days to skip; September's output is
+unchanged. If the MBTA has not published October by December 4, 2026, the test is not run and the paper says
+so. Nothing else about the October or November analyses changes.

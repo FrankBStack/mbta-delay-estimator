@@ -2,7 +2,7 @@
 month's file (no dependence on our log). Late = departure more than 5 min after schedule; early = more than
 60 s before. Overall and within route x direction; intervals resample days and routes together.
 
-Usage: python checks_mbta_record_gaps.py 2026-09 2026-09-08
+Usage: python checks_mbta_record_gaps.py 2026-09 2026-09-08 [last day] [days to skip ...]
 """
 import sys
 import zipfile
@@ -10,13 +10,14 @@ import numpy as np
 import pandas as pd
 
 month, first = sys.argv[1], sys.argv[2]
+last, skip = (sys.argv[3], sys.argv[4:]) if len(sys.argv) > 3 else ("2100-01-01", [])
 rng = np.random.default_rng(20261026)
 z = zipfile.ZipFile("data/MBTA_Bus_Arrival_Departure_Times_2026.zip")
 m = pd.read_csv(z.open(f"MBTA_Bus_Arrival_Departure_Times_2026/MBTA-Bus-Arrival-Departure-Times_{month}.csv"),
                 usecols=["service_date", "route_id", "direction_id", "stop_id", "point_type", "standard_type", "scheduled", "actual"],
                 dtype=str, engine="pyarrow")
 d = pd.to_datetime(m.service_date)
-m = m[(d >= first) & (d.dt.dayofweek < 5) & (m.point_type == "Midpoint") & m.actual.notna()].copy()
+m = m[(d >= first) & (d <= last) & ~d.isin(pd.to_datetime(skip)) & (d.dt.dayofweek < 5) & (m.point_type == "Midpoint") & m.actual.notna()].copy()
 sch = pd.to_datetime(m.scheduled.str[11:19], format="%H:%M:%S"); tod = sch.dt.hour * 3600 + sch.dt.minute * 60 + sch.dt.second
 act = pd.to_datetime(m.actual.str[11:19], format="%H:%M:%S"); atod = act.dt.hour * 3600 + act.dt.minute * 60 + act.dt.second
 dev = atod + np.where(atod < tod - 6 * 3600, 86400, 0) - tod
