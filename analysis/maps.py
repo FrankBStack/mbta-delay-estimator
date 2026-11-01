@@ -19,7 +19,7 @@ D = "data/"
 SEQ = ["#b7d3f6", "#6da7ec", "#2a78d6", "#184f95", "#0d366b"]   # blue ramp, steps 150-700
 HOT, COLD = "#e34948", "#2a78d6"
 INK, MUTED, GRID, WATER = "#0b0b0b", "#898781", "#d3d2cb", "#e3ecf2"
-EJ_INCOME, EJ_MINORITY, GRID_ON_EJ = "#cbcbcb", "#e8e8e8", "#a3a29b"   # greys: no hue shared with the points
+EJ_INCOME, EJ_MINORITY, GRID_ON_EJ = "#cbcbcb", "#e8e8e8", "#b9a98a"   # grey fills share no hue with the points; warm lines show over them
 HALO = [patheffects.withStroke(linewidth=2.5, foreground="white")]
 CITIES = [("Boston", -71.0589, 42.3601), ("Cambridge", -71.1097, 42.3736), ("Newton", -71.1925, 42.3290),
           ("Waltham", -71.2356, 42.3765), ("Dorchester", -71.0620, 42.3016), ("Quincy", -71.0023, 42.2529),
@@ -30,7 +30,7 @@ CORE_CITIES = [("Downtown", -71.0589, 42.3601, 0, 0), ("Cambridge", -71.1097, 42
                ("Dorchester", -71.0620, 42.3016, 0, 9)]
 # places named in the hot spot paragraphs that are not cities: label, lon, lat, offset in points
 PLACES = [("Roxbury Crossing", -71.0936, 42.3304, -22, -30), ("East Boston and Chelsea", -71.0224, 42.3835, 30, 12),
-          ("Marblehead", -70.8650, 42.4970, 0, 16)]
+          ("Marblehead", -70.8650, 42.4970, 22, -6)]
 CORE = (-71.135, 42.295, -71.030, 42.385)   # inner core shown in each inset
 COUNTIES = ["25025", "25017", "25021", "25009", "25023"]   # Suffolk, Middlesex, Norfolk, Essex, Plymouth
 plt.rcParams.update({"font.family": "sans-serif", "font.size": 9, "axes.edgecolor": GRID, "text.color": INK})
@@ -102,7 +102,7 @@ def figure():
     """One map: the main panel, an inner-core inset, the locator and a legend column."""
     fig = plt.figure(figsize=(8.5, 7.3))
     gs = fig.add_gridspec(3, 2, width_ratios=[3.1, 1], height_ratios=[1.25, 0.72, 1.0], wspace=0.03, hspace=0.1,
-                          left=0.005, right=0.995, top=0.93, bottom=0.045)
+                          left=0.005, right=0.995, top=0.985, bottom=0.01)
     ax, axc, axl, axg = (fig.add_subplot(gs[:, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, 1]), fig.add_subplot(gs[2, 1]))
     axg.set_axis_off()
     return fig, ax, axc, axl, axg
@@ -124,7 +124,7 @@ def draw_core(axc, ax, net, water, draw_points, line=GRID):
     ax.add_patch(Rectangle((cb[0], cb[1]), cb[2] - cb[0], cb[3] - cb[1], fill=False, edgecolor=INK, linewidth=0.7, zorder=6))
 
 
-def quantile_points(pts, col, net, water, label, fmt, title, footer, path, state, bounds):
+def quantile_points(pts, col, net, water, label, fmt, path, state, bounds):
     q = pd.qcut(pts[col], 5, labels=False, duplicates="drop")
     edges = pts[col].quantile([0, .2, .4, .6, .8, 1]).to_numpy()
 
@@ -142,13 +142,11 @@ def quantile_points(pts, col, net, water, label, fmt, title, footer, path, state
     locator(axl, state, bounds)
     handles = [Line2D([], [], marker="o", linestyle="", markersize=6, color=SEQ[k], label=f"{fmt(edges[k])} to {fmt(edges[k + 1])}") for k in range(5)]
     axg.legend(handles=handles, title=label, loc="upper left", frameon=False, fontsize=8, title_fontsize=8, alignment="left")
-    fig.suptitle(title, x=0.01, ha="left", fontsize=12, color=INK)
-    fig.text(0.01, 0.01, footer, fontsize=7, color=MUTED)
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
-def hotspot_points(hs, col, net, water, title, subtitle, path, state, bounds, bg=None, places=(), line=GRID):
+def hotspot_points(hs, col, net, water, path, state, bounds, bg=None, places=(), line=GRID):
     cls = hs[col + "_class"]
 
     def draw(ax, scale):
@@ -175,8 +173,6 @@ def hotspot_points(hs, col, net, water, title, subtitle, path, state, bounds, bg
         handles += [Patch(color=EJ_INCOME, label="Block group meets the\nincome criterion"),
                     Patch(color=EJ_MINORITY, label="Meets the minority\ncriterion only")]
     axg.legend(handles=handles, loc="upper left", frameon=False, fontsize=8, alignment="left", labelspacing=0.9)
-    fig.suptitle(title, x=0.01, ha="left", fontsize=12, color=INK)
-    fig.text(0.01, 0.01, subtitle, fontsize=7, color=MUTED)
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -190,20 +186,16 @@ def main(outdir):
     bounds = (stops.x.min(), stops.y.min(), stops.x.max(), stops.y.max())
     net, water, state = layers(bounds)
     bg = gpd.read_file(D + "bg.gpkg")
-    footer = (f"Weekdays Sep 28 to Oct 23, 2026, less Oct 12. {len(stops):,} stops with 100 or more arrivals; quintiles. "
-              "Grey lines: MBTA bus routes.")
+    # figure titles and notes are in the paper, not the images
     quantile_points(stops, "late_share", net, water, "Share of arrivals more than\n5 minutes late", lambda v: f"{100 * v:.0f}%",
-                    "Late arrivals by bus stop", footer, f"{outdir}/map1_late_by_stop.png", state, bounds)
+                    f"{outdir}/map1_late_by_stop.png", state, bounds)
     quantile_points(stops, "mae", net, water, "MBTA 5-minute prediction,\nmean absolute error", lambda v: f"{v:.0f} s",
-                    "Prediction error by bus stop", footer, f"{outdir}/map2_prediction_error_by_stop.png", state, bounds)
-    gi = "Getis-Ord Gi*, 500 m distance band, FDR-corrected at 0.05. Stops that are not significant are not shown."
-    hotspot_points(hs, "late_share", net, water, "Hot spots of late arrivals", gi, f"{outdir}/map3_hotspots_late.png", state, bounds)
-    hotspot_points(hs, "mae", net, water, "Hot spots of prediction error", gi, f"{outdir}/map4_hotspots_error.png", state, bounds)
-    adj = gi + " Measures are relative to other stops at the same point on the same routes."
-    hotspot_points(hs, "late_r", net, water, "Hot spots of late arrivals after removing route and position effects", adj,
-                   f"{outdir}/map5_residual_hotspots_late_ej.png", state, bounds, bg=bg, line=GRID_ON_EJ)
-    hotspot_points(hs, "err_r", net, water, "Hot spots of prediction error after removing route and position effects", adj,
-                   f"{outdir}/map6_residual_hotspots_error_ej.png", state, bounds, bg=bg, places=PLACES, line=GRID_ON_EJ)
+                    f"{outdir}/map2_prediction_error_by_stop.png", state, bounds)
+    hotspot_points(hs, "late_share", net, water, f"{outdir}/map3_hotspots_late.png", state, bounds)
+    hotspot_points(hs, "mae", net, water, f"{outdir}/map4_hotspots_error.png", state, bounds)
+    hotspot_points(hs, "late_r", net, water, f"{outdir}/map5_residual_hotspots_late_ej.png", state, bounds, bg=bg, line=GRID_ON_EJ)
+    hotspot_points(hs, "err_r", net, water, f"{outdir}/map6_residual_hotspots_error_ej.png", state, bounds, bg=bg, places=PLACES,
+                   line=GRID_ON_EJ)
     print("maps written")
 
 
