@@ -16,6 +16,8 @@ Public layers, also in `data/`:
 - `tl_2024_25_bg/`: TIGER 2024 block groups for Massachusetts
 - `acsdt5y2024-b19013.dat`: ACS 2020–2024 median household income, table-based summary file
 - `ej2020/`: MassGIS 2020 Environmental Justice Populations
+- `tiger_water/`: TIGER 2024 area water for Suffolk, Middlesex, Norfolk, Essex and Plymouth counties, and the
+  Census cartographic state boundaries (`cb_2023_us_state_500k.zip`), for the map base layers and locator
 
 ## Run
 
