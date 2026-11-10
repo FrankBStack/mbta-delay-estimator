@@ -230,3 +230,14 @@ Run, after downloading the 2026 file again once it includes October:
 the September figures, with options added for the last day and for days to skip; September's output is
 unchanged. If the MBTA has not published October by December 4, 2026, the test is not run and the paper says
 so. Nothing else about the October or November analyses changes.
+
+## Data note: November 6 evening (2026-11-10, before any replication data was analyzed)
+
+On Friday, November 6, between about 6 and 8 pm, about 45% of the bus visits normally logged as arrivals were
+logged as passes instead: arrivals in those two hours fell from about 18,400 and 15,500 to 10,200 and 10,400,
+and passes rose from about 3,700 to 10,300 and 8,700, so total stop visits were about the same as on other
+days. The poller logged no errors, so the likely cause is the MBTA's vehicle feed reporting buses as in
+transit rather than stopped; the raw positions for that evening have since been pruned. No day is excluded.
+The main November versions count arrivals and passes together and are barely affected; the arrivals-only
+secondary versions lose about 13,000 evening arrivals, under 0.3% of the window. This was found from daily
+and hourly counts only; no comparison between areas had been made on replication data.
