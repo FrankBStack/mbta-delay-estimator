@@ -39,8 +39,22 @@ Public layers, also in `data/`:
 which pulls gaps toward zero, and resampled days only.
 
 `analyze.py` writes the tables (`table_*.csv`), `hotspots.csv` and `results.json`;
-`maps.py` draws the four maps; `write_results.py` summarizes the tables as `results.md`. The replication window (October 26 to November 20) is
-the same three commands on a second export, with the scripts unchanged.
+`maps.py` draws the maps; `write_results.py` summarizes the tables as `results.md`.
+
+The replication window (October 26 to November 20, less November 11), after November 20:
+
+```bash
+ssh opc@<server> 'cd /opt/tracker && docker compose exec -T db psql -q -U tracker -d tracker' \
+    < export_window2.sql | gzip > data/visits_window2.csv.gz
+gzip -dc data/visits_window2.csv.gz | awk -F, 'NR == 1 || $1 == "arrival"' | gzip > data/arrivals_window2.csv.gz
+.venv/bin/python fetch_gtfs_archive.py 2026-10-26 2026-11-20
+.venv/bin/python analyze.py data/visits_window2.csv.gz output/window2_main          # arrivals and passes
+.venv/bin/python analyze.py data/arrivals_window2.csv.gz output/window2_arrivals   # arrivals only
+.venv/bin/python november.py data/visits_window2.csv.gz output/window2 2026-10-26 2026-11-20 2026-11-11
+```
+
+`analyze.py` is unchanged; the export leaves out November 11, which `analyze.py` would otherwise count as a
+weekday. `november.py` runs H4, H5, H4b and H5b and the coverage report.
 
 ## Method, in brief
 
@@ -257,3 +271,25 @@ mid-route timepoint departures.
 - Secondary, not tests: state minority criterion +2.2 (-1.7 to +5.9); income -0.7 (-3.7 to +2.8). Within route
   and direction: federal -0.3, state minority -0.9, income -0.2, all intervals including zero. Timetable-run
   trips only: federal +1.4 (-1.6 to +4.8). Early departures, federal rule: -0.5 (-4.1 to +2.3).
+
+## November code (fixed 2026-11-10, before any replication data was analyzed)
+
+`export_window2.sql`, `fetch_gtfs_archive.py` and `november.py` were written and tested on October data (with
+arrival times standing in for departures) and on three rows and row counts of October 26, with no comparison
+between areas on replication data. The hypotheses above leave these choices open; they are fixed here:
+
+- A pass counts at the pass time for arrival, departure and lateness. A pass on a trip and stop already scored as
+  an arrival is dropped (30 of 67,830 on October 26).
+- H4 and H5 use stops with 100 or more weekday visits in the window, as `analyze.py` does, and leave out each
+  trip's first and last scheduled stop: the first is layover and the last has no departure.
+- Scheduled visits come from the MBTA timetable version in effect each day (`archived_feeds.txt`). A visit not on
+  that day's timetable is left out of H4 and H5 and counted under coverage.
+- H5: a bus's gap is the time since the previous logged bus of the same route and direction at the stop that
+  day; the scheduled gap is to the previous scheduled trip on that day's timetable. The first bus of the day at
+  each stop has no gap. A bus the log missed makes the next bus's gap look long, so H5 is read with the coverage
+  report beside it.
+- Intervals: 1,000 draws resampling days and routes, seed 20261110. H4 and H5 are supported if the lower end of
+  the 95% interval is above zero.
+- Coverage: scheduled stop visits after each trip's first stop, by flag. Trips that ran are those with at least
+  one logged visit that day; their visits are split into arrival, pass and neither, and the share of scheduled
+  visits on trips with no logged visit is reported separately.
