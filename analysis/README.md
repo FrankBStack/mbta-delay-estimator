@@ -16,6 +16,10 @@ Public layers, also in `data/`:
 - `tl_2024_25_bg/`: TIGER 2024 block groups for Massachusetts
 - `acsdt5y2024-b19013.dat`: ACS 2020–2024 median household income, table-based summary file
 - `ej2020/`: MassGIS 2020 Environmental Justice Populations
+- `MBTA_Bus_Arrival_Departure_Times_2026.zip`: the MBTA's 2026 bus arrival and departure file as downloaded on
+  2026-11-10 (posted 2026-11-05, January to October). The September figures came from the download of
+  2026-10-15 (January to September), kept as `MBTA_Bus_Arrival_Departure_Times_2026_through-sep.zip`; the MBTA
+  has since reprocessed earlier months, so rerunning September on the new file can give slightly different numbers.
 - `tiger_water/`: TIGER 2024 area water for Suffolk, Middlesex, Norfolk, Essex and Plymouth counties, and the
   Census cartographic state boundaries (`cb_2023_us_state_500k.zip`), for the map base layers and locator
 
@@ -241,3 +245,15 @@ transit rather than stopped; the raw positions for that evening have since been 
 The main November versions count arrivals and passes together and are barely affected; the arrivals-only
 secondary versions lose about 13,000 evening arrivals, under 0.3% of the window. This was found from daily
 and hourly counts only; no comparison between areas had been made on replication data.
+
+## October MBTA-record test: result (run 2026-11-10)
+
+Run once, as written above, on the MBTA file posted 2026-11-05 and downloaded 2026-11-10, with
+`checks_mbta_record_gaps.py` unchanged since tag `capstone-prespec-2026-10-27`: 16 weekdays, 1,012,644
+mid-route timepoint departures.
+
+- **H6: not supported.** Federal rule, all trips, unadjusted: +2.2 points (95% interval -1.6 to +5.9). The
+  lower end is below zero. The gap points the same way as September's (+4.1) at about half the size.
+- Secondary, not tests: state minority criterion +2.2 (-1.7 to +5.9); income -0.7 (-3.7 to +2.8). Within route
+  and direction: federal -0.3, state minority -0.9, income -0.2, all intervals including zero. Timetable-run
+  trips only: federal +1.4 (-1.6 to +4.8). Early departures, federal rule: -0.5 (-4.1 to +2.3).
