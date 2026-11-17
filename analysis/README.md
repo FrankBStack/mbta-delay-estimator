@@ -46,8 +46,9 @@ The replication window (October 26 to November 20, less November 11), after Nove
 ```bash
 ssh opc@<server> 'cd /opt/tracker && docker compose exec -T db psql -q -U tracker -d tracker' \
     < export_window2.sql | gzip > data/visits_window2.csv.gz
-gzip -dc data/visits_window2.csv.gz | awk -F, 'NR == 1 || $1 == "arrival"' | gzip > data/arrivals_window2.csv.gz
 .venv/bin/python fetch_gtfs_archive.py 2026-10-26 2026-11-20
+.venv/bin/python fill_positions.py data/visits_window2.csv.gz    # positions for trips since dropped from the timetable
+gzip -dc data/visits_window2.csv.gz | awk -F, 'NR == 1 || $1 == "arrival"' | gzip > data/arrivals_window2.csv.gz
 .venv/bin/python analyze.py data/visits_window2.csv.gz output/window2_main          # arrivals and passes
 .venv/bin/python analyze.py data/arrivals_window2.csv.gz output/window2_arrivals   # arrivals only
 .venv/bin/python november.py data/visits_window2.csv.gz output/window2 2026-10-26 2026-11-20 2026-11-11
@@ -293,3 +294,15 @@ between areas on replication data. The hypotheses above leave these choices open
 - Coverage: scheduled stop visits after each trip's first stop, by flag. Trips that ran are those with at least
   one logged visit that day; their visits are split into arrival, pass and neither, and the share of scheduled
   visits on trips with no logged visit is reported separately.
+
+## Data note: schedule positions for October 30 and 31 (2026-11-17, before any replication data was analyzed)
+
+The export takes each visit's scheduled position along its trip from the timetable loaded in the live database.
+The timetable reloaded on November 16 no longer has the Lynn garage's service for Friday, October 30 and
+Saturday, October 31 (862 and 589 trips on routes such as 426, 429, 435, 441, 442, 450 and 455), so 26,698
+arrivals on October 30, about 9% of that day, would have been exported without a position and dropped by
+`analyze.py`. Arrival times and lateness are stored with each visit and are not affected. `fill_positions.py`
+fills a missing position from the MBTA's archived timetable in effect that day; all 1,451 trips are in it. On
+October 14 to 19 data with a fifth of positions blanked, it restored every one to its original value and left
+the rest of the file unchanged. The run steps above now include it. This was found from row counts only; no
+comparison between areas had been made on replication data.
