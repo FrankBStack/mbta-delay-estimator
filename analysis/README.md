@@ -306,3 +306,21 @@ fills a missing position from the MBTA's archived timetable in effect that day; 
 October 14 to 19 data with a fifth of positions blanked, it restored every one to its original value and left
 the rest of the file unchanged. The run steps above now include it. This was found from row counts only; no
 comparison between areas had been made on replication data.
+
+## Exploratory addition: route against route on the MBTA record (2026-11-18, after the H6 result)
+
+`checks_mbta_record_routes.py` compares flagged routes with unflagged routes on the MBTA's mid-route timepoint
+departures, each route counted once, with the route flags of `analyze.py` and 1,000 draws resampling days and routes
+(seed 20261118). It is not a test: it was added after the September and October stop-level gaps had been seen, because
+H6 compares stops and Title VI monitoring compares routes. 148 of the 152 flagged or unflagged routes have such
+departures (not 441/442, 714, 716, 89/93).
+
+```bash
+.venv/bin/python checks_mbta_record_routes.py data/MBTA_Bus_Arrival_Departure_Times_2026_through-sep.zip 2026-09 2026-09-08 2026-09-30
+.venv/bin/python checks_mbta_record_routes.py data/MBTA_Bus_Arrival_Departure_Times_2026.zip 2026-10 2026-10-01 2026-10-23 2026-10-12
+```
+
+- September (17 weekdays): income +4.3 points (-1.3 to +9.7); federal rule +0.9 (-3.3 to +5.1); state minority +2.3
+  (-7.1 to +13.7, 11 unflagged routes).
+- October (16 weekdays): income +0.2 (-4.9 to +5.6); federal rule +0.1 (-4.1 to +4.4); state minority +1.4
+  (-7.9 to +12.8).
