@@ -1,5 +1,6 @@
 """Exploratory: route against route in the MBTA's timepoint record. Each route's share of mid-route timepoint
 departures more than 5 min late, flagged routes minus unflagged routes, each route counted once (as analyze.route_gap).
+Also the two groups' mean route shares and the same gap with each route weighted by its departures.
 Route flags are those of analyze.py (table_route_shares.csv). Intervals resample days and routes together.
 
 Usage: python checks_mbta_record_routes.py <zip> 2026-09 2026-09-08 [last day] [days to skip ...]
@@ -40,17 +41,23 @@ def gap(flag, dw, rw):
     ok = (A > 0) & (rw > 0)
     share = np.where(ok, S / np.maximum(A, 1e-12), np.nan)
     a1, a0 = ok & flag, ok & ~flag
-    return np.average(share[a1], weights=rw[a1]) - np.average(share[a0], weights=rw[a0])
+    once = np.average(share[a1], weights=rw[a1]) - np.average(share[a0], weights=rw[a0])
+    by_departures = np.average(share[a1], weights=(rw * A)[a1]) - np.average(share[a0], weights=(rw * A)[a0])
+    return once, by_departures
 
 
 rows = []
 for crit in an.CRITERIA:
     flag = (shares[crit].reindex(route_ids) >= an.ROUTE_SHARE).to_numpy()
     pt = gap(flag, np.ones(len(m)), np.ones(nr))
-    draws = [gap(flag, np.bincount(rng.integers(0, nd, nd), minlength=nd)[day].astype(float),
-                 np.bincount(rng.integers(0, nr, nr), minlength=nr).astype(float)) for _ in range(an.REPS)]
-    rows.append(dict(criterion=crit, flagged_routes=int(flag.sum()), unflagged_routes=int((~flag).sum()), gap=100 * pt,
-                     lo=100 * np.percentile(draws, 2.5), hi=100 * np.percentile(draws, 97.5)))
+    draws = np.array([gap(flag, np.bincount(rng.integers(0, nd, nd), minlength=nd)[day].astype(float),
+                          np.bincount(rng.integers(0, nr, nr), minlength=nr).astype(float)) for _ in range(an.REPS)])
+    lo, hi = 100 * np.percentile(draws, 2.5, axis=0), 100 * np.percentile(draws, 97.5, axis=0)
+    share = m.groupby(route).late.mean().to_numpy()
+    rows.append(dict(criterion=crit, flagged_routes=int(flag.sum()), unflagged_routes=int((~flag).sum()), gap=100 * pt[0], lo=lo[0], hi=hi[0],
+                     flagged_late_pct=100 * share[flag].mean(), unflagged_late_pct=100 * share[~flag].mean(),
+                     gap_by_departures=100 * pt[1], lo_by_departures=lo[1], hi_by_departures=hi[1]))
 out = pd.DataFrame(rows)
 out.to_csv(f"output/window1_v2/table_mbta_record_routes_{month}.csv", index=False)
+print(f"late share of all departures: {100 * late.mean():.1f}%")
 print(out.to_string(index=False, float_format=lambda x: f"{x:+.1f}"))
