@@ -25,7 +25,7 @@ const MAX_LABEL_W = 132;
 // the pill's bold 10.5px text averages about 6.3px a glyph
 const PILL_CHAR_W = 6.3;
 const PILL_PAD = 12;
-// sidebar less its padding — used only until the first measurement lands
+// sidebar less its padding, used only until the first measurement lands
 const FALLBACK_W = 318;
 
 export default function DelayByRouteChart({

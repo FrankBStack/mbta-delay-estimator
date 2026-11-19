@@ -328,7 +328,7 @@ async def _health() -> dict[str, Any]:
         poller = await realtime.read_heartbeat(conn)
 
     # the containers share the host's root volume, so this is the disk
-    # Postgres is writing to; the page warns when it runs low
+    # Postgres is writing to
     disk = shutil.disk_usage("/")
 
     return {

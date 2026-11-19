@@ -141,9 +141,7 @@ async def test_a_stop_seen_stopped_at_or_the_origin_is_never_a_pass(conn):
 async def test_the_arrival_itself_never_scores_the_position_estimate(conn):
     # approaching ST2, then a one-minute countdown issued at 05:05:20 with no
     # position report near it, then the arrival 40s later. The arrival is the
-    # nearest observation to the sample, and it is not allowed to be the one
-    # that scores the estimate: a score of zero there would be the estimator
-    # grading itself on the answer
+    # nearest observation to the sample and must not score the estimate
     await observe(conn, at(18150), -71.095, seq=2, status="IN_TRANSIT_TO")
     await sample(conn, 2, 60, at(18320), at(18380))
     await observe(conn, at(18360), -71.09, seq=2, status="STOPPED_AT")

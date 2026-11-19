@@ -5,7 +5,7 @@
     python -m app.gtfs_static --keep       # keep the download around
 
 A kept download is reused until it is a day old, then fetched again, so a
-scheduled reload actually picks up the agency's new feed.
+scheduled reload picks up the agency's new feed.
 
 Builds a fresh set of static tables in a staging schema, runs app.offsets
 there, and swaps them in with one short transaction. The live tables are

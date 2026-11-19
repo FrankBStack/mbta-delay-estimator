@@ -65,7 +65,7 @@ ALTER TABLE trip_update ADD COLUMN IF NOT EXISTS departure_delay_s integer;
 CREATE INDEX IF NOT EXISTS trip_update_ts_idx ON trip_update (ts DESC);
 
 -- One row per placeable observation. computed_delay_s is ours, feed_delay_s is
--- theirs, divergence_s is what we actually care about.
+-- the feed's, divergence_s is the first minus the second.
 CREATE TABLE IF NOT EXISTS delay_observation (
     id               bigserial PRIMARY KEY,
     vehicle_id       text NOT NULL,

@@ -63,9 +63,8 @@ async def route_shape(
     """Route geometry as GeoJSON.
 
     A route has one shape per pattern and direction and most of them overlap,
-    so collect and simplify -- the map only needs the line, not every survey
-    point. LEFT JOIN because Shuttle-Generic is a real route with real vehicles
-    and no fixed alignment; missing shape is not a missing route.
+    so they are collected and simplified. LEFT JOIN because Shuttle-Generic
+    has vehicles and no fixed alignment, so a route can exist without a shape.
     """
     row = await db.pool().fetchrow(
         """

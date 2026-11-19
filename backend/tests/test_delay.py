@@ -50,7 +50,7 @@ async def test_layover_after_departure_is_late(conn):
 
 
 async def test_stopped_at_keeps_sign(conn):
-    # early at a mid-route timepoint is genuinely early
+    # early at a mid-route timepoint counts as early, unlike at the origin
     row = await observe(conn, at(18180), -71.09, seq=2, status="STOPPED_AT")
     assert row["method"] == "stopped_at"
     assert row["computed_delay_s"] == -120

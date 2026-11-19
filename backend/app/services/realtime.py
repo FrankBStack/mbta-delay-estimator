@@ -1,8 +1,8 @@
 """Poll the GTFS-realtime feeds into Postgres.
 
-VehiclePositions gives us where things are. TripUpdates gives predicted arrival
-times -- note there is no `delay` field in the MBTA's feed, so we derive one
-here by subtracting the scheduled time for the same trip and stop.
+VehiclePositions says where vehicles are. TripUpdates gives predicted arrival
+times. The MBTA's feed has no `delay` field, so one is derived here by
+subtracting the scheduled time for the same trip and stop.
 """
 
 import asyncio
@@ -82,7 +82,7 @@ async def fetch(client: httpx.AsyncClient, url: str) -> gtfs_rt.FeedMessage:
 
 
 async def ingest_vehicles(conn: asyncpg.Connection, msg: gtfs_rt.FeedMessage) -> list[int]:
-    """Insert positions, return ids of the rows that were actually new.
+    """Insert positions, return ids of the rows that were new.
 
     The feed keeps republishing a vehicle at its old timestamp when it has
     nothing fresher, so the unique constraint dedupes and we skip recomputing

@@ -2,8 +2,7 @@
 
 Two estimates exist for every upcoming stop: the MBTA's predicted arrival, and
 the one implied by where the vehicle is against its timetable (delay.py).
-Neither can judge the other. The vehicle's first STOPPED_AT report at the stop
-can judge both.
+Both are scored against the vehicle's first STOPPED_AT report at the stop.
 
 Every prediction for every stop is too much to store, so the ingest keeps a
 prediction only at the moments its countdown reads one of HORIZONS_S: "when
