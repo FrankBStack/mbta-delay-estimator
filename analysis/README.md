@@ -328,3 +328,70 @@ departures (not 441/442, 714, 716, 89/93).
   in October; federal rule +3.9 (-2.3 to +10.1) and +2.3 (-3.2 to +7.9), close to the stop-level gaps. Mean late share of income-flagged routes 43.5% in September and
   39.4% in October, against 39.2% in both months for other routes. All departures: 40.0% late in September, 38.4% in
   October.
+
+## Standing-time test (fixed 2026-11-19, before any replication data was exported or analyzed)
+
+The within-route lateness comparison cannot see delay that a flagged stop itself adds, because a bus held at one
+stop is as late at the next. On September 28-30, part of the log's bias for the income criterion came from timing
+arrivals where the MBTA times departures (about a quarter of the lateness understatement and two thirds of the
+early-arrival overstatement), which would follow if buses stand longer at income-flagged stops. The October log
+cannot test that: it has no departures, and it records only buses seen standing. The replication window has
+departures and passes. This section fixes a test on it.
+
+**What had been seen of the replication window when this was written.** The window was still being recorded and
+nothing had been exported. Four things had been examined, all recorded above, none split by flag or by area, and
+none involving a standing time:
+
+- October 26, system-wide: of scheduled stop visits on finished trips that ran, the shares with an arrival, with a
+  pass and with neither (77.2%, 18.4%, 4.4%); the share of passes carrying a prediction; three rows and row counts
+  used to test the November code. October 26 therefore stays in the test.
+- Daily, and for November 6 hourly, counts of arrivals and passes, and whether rows carry a departure time and a
+  prediction, to check that recording was working.
+- Row counts for October 30 and 31, for the schedule positions lost in the timetable reload.
+- November 6 is named below because those counts showed that evening's arrivals logged as passes (data note above).
+  A pass counts as zero standing time, so that evening understates standing at every stop alike. This is known
+  from counts and from how the measure is built, not from any result.
+
+**The test.**
+
+- **Measure.** A bus's standing time at a stop is `departed_at - arrived_at` in seconds for a logged arrival and
+  zero for a pass. No timetable enters it. A standing time above 300 s is set to 300 s; the visit is not dropped.
+- **Visits.** Weekdays from October 26 to November 20, 2026, excluding November 11. Stops with 100 or more weekday
+  visits in the window, as in `analyze.py`. Each trip's first and last scheduled stop is left out, as for H4 and H5.
+  Timepoint stops (a `checkpoint_id` in the MBTA timetable version in effect that day) are left out of the test,
+  because early buses wait there. A scheduled visit logged as neither arrival nor pass is left out and counted
+  under coverage, by flag.
+- **Flags.** Each stop takes the flag of the block group it lies in, as in every other comparison. A stop with an
+  opposite-flag stop within 50 m keeps its own flag in the test.
+- **H7 (primary).** Within route x direction x position cells (the nine position bins and the cell weights of
+  `analyze.py`), buses stand longer at stops in block groups meeting the state Environmental Justice income
+  criterion than at other stops: mean standing seconds per visit, flagged minus unflagged, every arrival or pass
+  counted once.
+- **Smallest gap that counts: 3 seconds per visit.** Over the 20 or so stops of a twenty-minute ride that is about
+  a minute, the size this study uses for an early bus. It was chosen on that ground, with no replication data.
+- **Decision rule.** Intervals are 95%, from 1,000 draws resampling service days and routes together (seed
+  20261119). H7 is supported if the lower end of the interval is above zero and the estimate is 3 s or more. If the
+  interval is above zero and the estimate is under 3 s, the result is reported as a difference too small to
+  matter, not as support. If the interval includes zero, H7 is not supported; if its upper end is also under 3 s,
+  a gap of the size that counts is ruled out.
+- **Secondary, reported but not tested.** The same gap under the state minority criterion and the federal rule;
+  across all stops, unadjusted; at timepoint stops only; on timetable-run and on headway-run trips; without routes
+  15, 23 and 66; without November 6; without the 300 s limit; with stops that have an opposite-flag stop within
+  50 m dropped, both labeled flagged, or both labeled unflagged; and the gap's two parts, the share of visits at
+  which the bus stopped and the mean standing time when it did.
+- **Beside H4 and H5.** H4, H5 and H7 are the three tests fixed in advance for the replication window, and each
+  keeps its own decision rule. They are reported together, each with its interval and with a bootstrap p-value
+  adjusted by the Holm correction across the three, and the paper says of any supported test whether it also holds
+  after that correction. Nothing about H4 or H5 changes.
+
+**What a yes would and would not mean.** Support for H7 would show that, on the same routes at the same point of
+the trip, buses spend more time standing at income-flagged stops. That is where buses lose time. It is not worse
+service: the obvious cause is more people boarding, and a stop where more riders board is one the bus is serving.
+This study has no boarding counts, so it cannot separate boarding from other causes (a signal at a near-side stop,
+an operator holding), and the paper will say so and will not call a supported H7 a disparity in service. A no
+would not show that flagged stops add no delay, only that standing time at the stop is not where it shows.
+
+Known limits, fixed here so they are not found afterwards: buses report about every 16 s, so standing time is
+understated by about that much at every stop alike, and a stop shorter than the gap between reports can be logged
+as a pass. A comparison of lateness between consecutive timepoints of a trip in the MBTA's record may be added as
+an exploratory side check; it is not fixed here.
