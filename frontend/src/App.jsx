@@ -152,7 +152,6 @@ export default function App() {
           api.delayByRoute({
             minutes: filters.current.windowMinutes,
             route_type: filters.current.routeType,
-            min_observations: 3,
           }),
           api.divergence({
             minutes: filters.current.windowMinutes,
