@@ -6,29 +6,29 @@ main README; this is the full breakdown.
 
 Since the MBTA publishes no delay field, its column here is derived as
 predicted arrival minus scheduled arrival for the same trip and stop. The two
-figures answer different questions (ours is how late a vehicle is right now,
-theirs is how late it will be on arrival), so the interesting part is where and
-why they diverge.
+figures answer different questions: ours is how late a vehicle is right now,
+theirs is how late it will be on arrival. This page covers where and why they
+diverge.
 
-The September tables are measured after two corrections to the estimator;
-the July tables at the end predate them and are kept because they document
-how it was debugged. The first fixed the feed join (`with_feed` in `app/services/delay.py`), which
-took the newest prediction for a stop rather than the contemporaneous one.
-Re-measured after that over a weekday evening peak: correlation 0.9935, mean
-divergence +19s, σ 50s, 88.8% within 60s (87,461 compared observations).
+The September tables are measured after two corrections to the estimator.
+The July tables at the end predate them and are kept because they document
+how it was debugged. The first correction fixed the feed join (`with_feed` in
+`app/services/delay.py`), which took the newest prediction for a stop rather
+than the contemporaneous one. Re-measured after that over a weekday evening
+peak: correlation 0.9935, mean divergence +19s, σ 50s, 88.8% within 60s
+(87,461 compared observations).
 
 The second is the dwell hold: `stopped_at` now records the deviation at the
 arrival event and holds it, rather than measuring against the clock. The
-`stopped_at` row in the peak table below is the case it addresses. The +19s
-mean divergence was mostly this: recomputing the same observations against
-predicted arrival gave +34s, against predicted departure −17s, for both the
-`stopped_at` and `interpolated` classes, which is what you get from comparing a
-during-dwell clock reading against an at-arrival figure. `first_stop` is now
-floored at zero like `layover`, which the −127s in the peak table called for,
-and idle vehicles ahead of their origin (either method, delay 0) are excluded
-from all aggregates.
-The effect of the dwell hold and its cap, measured on identical observations,
-is in the next section.
+`stopped_at` row in the peak table below is the case it addresses. Most of
+the +19s mean divergence came from this. Recomputing the same observations
+against predicted arrival gave +34s, against predicted departure −17s, for
+both the `stopped_at` and `interpolated` classes, as expected when a clock
+reading taken during a dwell is compared with a figure taken at arrival.
+`first_stop` is now floored at zero like `layover`, which the −127s in the
+peak table called for, and idle vehicles ahead of their origin (either
+method, delay 0) are excluded from all aggregates. The effect of the dwell
+hold and its cap, measured on identical observations, is in the next section.
 
 ## The dwell hold, before and after
 
@@ -79,19 +79,17 @@ By placement method at peak, mean absolute divergence:
 | `layover` | 2,372 | 35s | 35s | 35s |
 | `first_stop` | 146 | 208s | 34s | 34s |
 
-The hold does what it was meant to: the `stopped_at` class, which is 40% of
-peak observations, went from the worst-agreeing mid-route method to the best,
-and the systematic offset in the headline mean roughly halved. The p90 moved by
-19 seconds; the p10 did not move at all, which is what you'd expect from a
-change that only affects vehicles reading late while they dwell.
+The `stopped_at` class, 40% of peak observations, went from the
+worst-agreeing mid-route method to the best, and the offset in the headline
+mean roughly halved. The p90 moved by 19 seconds and the p10 did not move,
+since the change only affects vehicles that read late while they dwell.
 
 ### Where the hold made things worse
 
-Under the plain hold, standard deviation and correlation both got worse, and
-the reason is a small tail, not the bulk. At peak, 72 of 80,535 compared
-observations diverge by more than ten minutes. Leaving those out, the standard
-deviation is 49s under the hold against 67s by the clock, and 37s against 45s
-overnight.
+Under the plain hold, standard deviation and correlation both got worse
+because of a small tail. At peak, 72 of 80,535 compared observations diverge
+by more than ten minutes. Leaving those out, the standard deviation is 49s
+under the hold against 67s by the clock, and 37s against 45s overnight.
 
 The tail splits two ways:
 
@@ -106,10 +104,9 @@ The tail splits two ways:
   and stayed for an hour and forty minutes; the hold reports it five minutes
   late while the clock and the feed both say an hour and forty-three.
 
-The second group is a real limitation of the plain hold. It is correct for a
-normal dwell of a minute or two, where the clock reading is an artifact of the
-schedule having no dwell time, and wrong for a vehicle that is genuinely
-stuck.
+The second group is a limitation of the plain hold. It is correct for a
+normal dwell of a minute or two, where the clock reading only reflects a
+schedule with no dwell time, and wrong for a vehicle that is stuck.
 
 ### The cap
 
@@ -133,18 +130,18 @@ the trip-assignment cases in the first group, which no dwell rule can fix.
 
 ## The first-stop bug
 
-This comparison caught a real bug in the first version of the estimator.
-Broken down by placement method, mid-route stops agreed with the agency to
-within 16 seconds, but vehicles stopped at the first stop of their trip came
-out 323 seconds early on average while the feed reported them on time.
+The comparison caught a bug in the first version of the estimator. Broken
+down by placement method, mid-route stops agreed with the agency to within 16
+seconds, but vehicles stopped at the first stop of their trip came out 323
+seconds early on average while the feed reported them on time.
 
-Both numbers made sense on their own terms. A bus sitting at its origin at
-04:55 ahead of an 05:00 departure has technically arrived five minutes early,
-but it isn't going to leave early, so the figure is useless.
+Both numbers were correct as computed. A bus sitting at its origin at 04:55
+ahead of an 05:00 departure has arrived five minutes early, but it will not
+leave early, so the figure is useless.
 
 Vehicles at their first stop are now measured against scheduled *departure*,
 floored at zero. Mid-route stops keep the signed comparison, since a vehicle
-passing a timepoint two minutes early really is early and passengers miss it.
+passing a timepoint two minutes early is early and passengers miss it.
 
 Recomputed over the same observations with the same feed values, changing only
 the estimator:
@@ -174,15 +171,14 @@ service and the weekday morning peak:
 | Standard deviation | 45s | 84s |
 | Within 60s of feed | 92.9% | 87.1% |
 
-Agreement is noticeably weaker at peak: service runs later on average and the
-spread between the two methods roughly doubles. That's expected, since
-congestion and boarding add variance that a position-derived figure and a
-forward-looking prediction absorb differently.
+Agreement is weaker at peak: service runs later on average and the spread
+between the two methods roughly doubles. Congestion and boarding add variance
+that a position-derived figure and a forward-looking prediction absorb
+differently.
 
-The offset itself is systematic rather than noise. It was first read as
-predictions baking in expected recovery; the later pairing analysis above
-attributes most of it to comparing a dwelling vehicle against its recorded
-arrival.
+The offset is systematic. It was first read as predictions baking in
+expected recovery. The later pairing analysis above attributes most of it to
+comparing a dwelling vehicle against its recorded arrival.
 
 Breaking the peak window down by placement method shows where the spread is:
 
@@ -271,8 +267,8 @@ where both estimates existed:
 | 5 | 2,748 | 84s | −62s | 84s | −32s |
 | 10 | 1,750 | 108s | −82s | 100s | −31s |
 
-The same shape as the other modes, which is the point: a figure read off a
-matched slot behaves like one read off the train's own timetable. Agreement
+This is the same shape as the other modes: a figure read off a matched slot
+behaves like one read off the train's own timetable. Agreement
 with the feed over the three hours to 11:30 AM: 90.1% within 60s, median
 +2s, 5,112 observations.
 

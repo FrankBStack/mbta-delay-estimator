@@ -30,8 +30,8 @@ times, so boarding time is folded into the travel segments. Measured against
 the clock, a vehicle sitting at a stop would read one second later for every
 second it dwells, then appear to catch up along the next leg. `stopped_at`
 therefore measures the deviation once, when the vehicle first reports itself
-stopped, and holds it until it moves. The catch-up along the leg remains, and
-is real: the timetable does expect the vehicle to have left.
+stopped, and holds it until it moves. The catch-up along the next leg
+remains, because the timetable does expect the vehicle to have left.
 
 Before the dwell hold, the mean divergence from the feed was +19s; most of that
 came from comparing a dwelling vehicle's clock reading against the feed's
@@ -40,8 +40,8 @@ recorded arrival. Measured on identical observations, the hold cut the
 ([docs/validation.md](validation.md)).
 
 The hold is capped at five minutes (`HOLD_CAP_S`). A vehicle that has sat
-longer than that is stuck, not dwelling: the schedule expected it to have
-left, and it is scored against the clock again. Without the cap, a train that
+longer than that is treated as stuck: the schedule expected it to have left,
+and it is scored against the clock again. Without the cap, a train that
 arrived five minutes late and then sat for an hour and a half read as five
 minutes late throughout while the feed had it at an hour and forty. With it,
 the count of ten-minute-plus disagreements at peak fell from 72 to 57, below
@@ -63,10 +63,10 @@ feed comparison and the arrival scoring all read the matched trip's
 timetable through the vehicle's stop ids. In the first minutes live, the
 median distance from the matched slot at the moment of matching was 48s.
 
-What this measures is deviation from the nearest scheduled slot. On a line
-run by headway that is the defensible single number, but it is blind to a
-train that missed its slot by a whole headway: it reads as the next one, on
-time. A headway measure would see that; it is a different feature.
+This measures deviation from the nearest scheduled slot. On a line run by
+headway that is a reasonable single number, but a train that missed its slot
+by a whole headway reads as the next one, on time. Catching that would take
+a headway measure, which the estimator does not have.
 
 ## Idle layovers
 

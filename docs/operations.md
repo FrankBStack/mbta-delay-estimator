@@ -83,7 +83,7 @@ rollup indefinitely. Each pass looks back `SCORE_LOOKBACK_H` hours (default
 window. A pass that runs past `SCORE_TIMEOUT_S` (default 600) is abandoned and
 retried next hour, and pruning runs before scoring, so a failing pass cannot
 stall it. `/api/analytics/health` reports the last successful pass and the
-last error under `poller`, and the page banner says when scoring is failing.
+last error under `poller`. The page does not show either.
 To catch up after a longer gap, within what the 48-hour position retention
 still holds:
 
@@ -115,9 +115,9 @@ The database is bounded by retention: positions and observations for
 `SAMPLE_RETENTION_H`, per-arrival scores for `SCORE_RETENTION_DAYS`. Only
 the daily rollup grows without limit, at about a megabyte a day.
 `/api/analytics/health` reports the size of each realtime table under
-`storage`, and the page warns when the disk is under a tenth free.
+`storage` and the free space under `disk`.
 
-What is not bounded is Docker. Each pull leaves the previous image behind
+Docker is not bounded. Each pull leaves the previous image behind
 and each build leaves layers in the cache, so run `docker image prune -f`,
 or `docker builder prune -f` after a build, once a deploy is up. Container
 logs are capped in compose at three 20 MB files per service, except the

@@ -31,13 +31,12 @@ Two fields are missing from the MBTA's data:
 - `shape_dist_traveled` is empty on every shape point in the feed, so there is
   no published measure of how far along a route a given stop sits.
 
-The second is the bigger problem: without it there's no way to say "this
-vehicle is between stops 7 and 8, 40% of the way along". `app.offsets` derives
-it instead: `ST_LineLocatePoint` computes, for every distinct (shape, stop)
-pair, the fraction along the route line at which that stop falls. That turns
-the timetable into a mapping from position to time, so a live vehicle projected
-onto its own shape can be compared with when the schedule expected a vehicle at
-that point.
+Without the second there is no way to say "this vehicle is between stops 7
+and 8, 40% of the way along". `app.offsets` derives it: `ST_LineLocatePoint`
+computes, for every distinct (shape, stop) pair, the fraction along the route
+line at which that stop falls. That turns the timetable into a mapping from
+position to time, so a live vehicle projected onto its own shape can be
+compared with when the schedule expected a vehicle at that point.
 
 The work is keyed on (shape_id, stop_id) rather than (trip_id, stop_sequence).
 In the Fall 2026 feed, 122,478 trips share only 1,147 shapes, which reduces the
@@ -117,16 +116,18 @@ September 24–29, less a two-and-a-half-day gap while scoring was stalled)
 puts the MBTA's prediction 45s early on average when a train is five minutes
 out and 82s early at ten; ours is within 11s of unbiased at both. The two
 figures are compared at the same moment, so that gap is the divergence.
-Neither is simply better: the MBTA's mean error is lower inside five
-minutes (54s against 68s), ours beyond ten (86s against 92s), and on stopped
-trains they agree 99% of the time. On buses the MBTA's mean error is lower
-at every horizon measured. Ours is the naive forecast, the current delay
-carried to the next stop; the point is how far the MBTA's countdown drifts
-from even that. The lines with the closest
-stations agree best (Needham 82%, Fairmount 80%), the long stretches to Fall
-River least (55%). The same optimism shows on every mode, but a bus is never
-more than a minute or two from its next stop, so it stays small there. The
-horizon-by-horizon tables are in
+
+On commuter rail neither is better throughout. The MBTA's mean error is
+lower inside five minutes (54s against 68s), ours beyond ten (86s against
+92s), and on stopped trains they agree 99% of the time. On buses the MBTA's
+mean error is lower at every horizon measured. Ours is the naive forecast,
+the current delay carried to the next stop. The comparison shows how far the
+MBTA's countdown drifts from it.
+
+The lines with the closest stations agree best (Needham 82%, Fairmount 80%),
+the long stretches to Fall River least (55%). The same optimism shows on
+every mode, but a bus is never more than a minute or two from its next stop,
+so it stays small there. The horizon-by-horizon tables are in
 [docs/validation.md](docs/validation.md#agreement-by-mode).
 
 The comparison has caught three estimator bugs so far. Scoring the same
@@ -259,11 +260,11 @@ commands, the weekly feed reload, and backfilling after an estimator change.
   vehicles on those trips are unaffected.
 - Between stops, the schedule is prorated evenly along the shape. A bus that
   crawls through the first half of a leg reads late and then recovers by the
-  next stop. That is inherent to the method and the main reason in-transit
-  observations agree with the feed less closely than stopped ones do.
+  next stop. This is the main reason in-transit observations agree with the
+  feed less closely than stopped ones do.
 - A wrong trip assignment in the feed passes through. A vehicle reporting a
   trip whose schedule is nowhere near it gets a plausible-looking figure
-  that is simply wrong; only results beyond three hours are flagged low
+  that is wrong, and only results beyond three hours are flagged low
   confidence. These were the outliers no estimator change could fix in
   [docs/validation.md](docs/validation.md).
 - The projection is specific to Massachusetts. Targeting another city means
