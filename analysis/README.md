@@ -324,3 +324,7 @@ departures (not 441/442, 714, 716, 89/93).
   (-7.1 to +13.7, 11 unflagged routes).
 - October (16 weekdays): income +0.2 (-4.9 to +5.6); federal rule +0.1 (-4.1 to +4.4); state minority +1.4
   (-7.9 to +12.8).
+- Each route weighted by its departures, same draws: income -0.1 (-7.5 to +8.2) in September and -3.0 (-8.8 to +3.4)
+  in October; federal rule +3.9 (-2.3 to +10.1) and +2.3 (-3.2 to +7.9), close to the stop-level gaps. Mean late share of income-flagged routes 43.5% in September and
+  39.4% in October, against 39.2% in both months for other routes. All departures: 40.0% late in September, 38.4% in
+  October.
